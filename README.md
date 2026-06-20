@@ -92,10 +92,11 @@ modify prudbg.c and prudbg.h (see remarks near the beginning of prudbg.c).  If y
 send me the diff so I can add it into future releases.
 
 
-COMMAND HELP
+*COMMAND HELP*
 I would like to spend a little time writing up a command document, but in the meantime the following will have to do.
 The command line takes the command 'help' to provide a detailed help, and 'hb' for a brief help.  Listed below is both.
 
+```sh
 PRU0> hb
 Command help
 
@@ -118,83 +119,116 @@ Command help
     WRD memory_location_wa value1 [value2 [value3 ...]] - Write a 32-bit value to PRU data memory for current PRU
     WRI memory_location_wa value1 [value2 [value3 ...]] - Write a 32-bit value to PRU instruction memory for current PRU
 
+```
+
+```sh
 PRU0> help
 Command help
 
-    Commands are case insensitive
-    Address and numeric values can be dec (ex 12), hex (ex 0xC), or octal (ex 014)
-    Memory addresses can be wa=32-bit word address, ba=byte address.  Suffix of i=instruction or d=data memory
-    Return without a command will rerun a previous d, dd, or di command while displaying the next block
+General hints:
+    - Commands are case insensitive
+    - Address and numeric values can be dec (ex 12), hex (ex 0xC), octal
+      (ex 014), or binary (ex 0b101010)
+    - Memory addresses are byte addressed.
+    - Pressing 'Enter' without a command will rerun a previouscommand.  For the
+      `d`, `dd`, or `di` commands subsequent iterations will display the next
+      block
 
-    BR [breakpoint_number [address]]
+BR [breakpoint_number [address]]
     View or set an instruction breakpoint
-       'b' by itself will display current breakpoints
-       breakpoint_number is the breakpoint reference and ranges from 0 to 4
-       address is the instruction word address that the processor should stop at (instruction is not executed)
-       if no address is provided, then the breakpoint is cleared
+     - 'b' by itself will display current breakpoints
+     - breakpoint_number is the breakpoint reference and ranges from 0 to 9
+     - address is the instruction word address that the processor should stop
+       at (instruction is not executed)
+     - if no address is provided, then the breakpoint is cleared
 
-    D memory_location_wa [length]
-    Raw dump of PRU data memory (32-bit word offset from beginning of full PRU memory block - all PRUs)
+CYCLE [clear | off | on ]
+    Display, clear, disable, or enable the cycle count register.
 
-    DD memory_location_wa [length]
-    Dump data memory (32-bit word offset from beginning of PRU data memory)
+D <address> [length]
+    Raw dump of PRU data memory (byte offset from beginning of full PRU memory
+    block - all PRUs)
 
-    DI memory_location_wa [length]
-    Dump instruction memory (32-bit word offset from beginning of PRU instruction memory)
+DD <address> [length]
+    Dump data memory (byte offset from beginning of PRU data memory)
 
-    DIS memory_location_wa [length]
-    Disassemble instruction memory (32-bit word offset from beginning of PRU instruction memory)
+DI <address> [length]
+    Dump instruction memory (byte offset from beginning of PRU instruction
+    memory)
 
-    G
+DIS <32bit-address> [length]
+    Disassemble instruction memory (32-bit word offset from beginning of PRU
+    instruction memory)
+
+G
     Start processor execution of instructions (at current IP)
 
-    GSS
-    Start processor execution using automatic single stepping - this allows running a program with breakpoints
+GSS [<count>]
+    Start processor execution using automatic single stepping - this allows
+    running a program with breakpoints.  If the optional <count> parameter is
+    given, only <count> steps will be made.  If <count> is either not specified
+    or given as '0', stepping will continue until otherwise interrupted.
 
-    HALT
+HALT
     Halt the processor
 
-    L memory_location_iwa file_name
-    Load program file into instruction memory at 32-bit word address provided (offset from beginning of instruction memory
+L <32bit-address> file_name
+    Load program file into instruction memory at 32-bit word address provided
+    (offset from beginning of instruction memory
 
-    PRU pru_number
+J address
+    Move the program counter to the specified address (absolute or relative). If <address> is not provided, jumps to +1
+
+PRU <pru_number>
     Set the active PRU where pru_number ranges from 0 to 1
     Some debugger commands do action on active PRU (such as halt and reset)
 
-    Q
+Q
     Quit the debugger and return to shell prompt.
 
-    R
-    Display the current PRU registers.
+R [value]
+    Display or modify the current PRU registers.
 
-    RESET
+RESET
     Reset the current PRU
 
-    SS
+SS [n_steps]
     Single step the current instruction.
 
-    WA [watch_num [address [value]]]
+WA [watch_num [<address> [ (len | : value0 [value1 ...]) ]]]
     Clear or set a watch point
-      format 1:  wa - print watch point list
-      format 2:  wa watch_num - clear watch point watch_num
-      format 3:  wa watch_num address - set a watch point (watch_num) so any change at that word address
-                 in data memory will be printed during program execution with gss command
-      format 4:  wa watch_num address value - set a watch point (watch_num) so that the program (run with gss) will
-                 be halted when the memory location equals the value
-      NOTE: for watchpoints to work, you must use gss command to run the program
+    For the `WA` command, the <address> may also utilize aliases to certain
+    registers:
+     * rN    -- address of Nth register (N is in range 0..31)
+     * cycle -- address of CYCLE count register, which, if enabled, provides a
+       count of PRU cycles that go by for each instruction executed
+    The various formats have the following effects
+     - format 1:  wa -- print watch point list
+     - format 2:  wa watch_num -- clear watch point watch_num
+     - format 3:  wa watch_num address -- set a watch point (watch_num) so any
+       change at that byte address in data memory will be printed during program
+       execution with gss command
+     - format 4:  wa watch_num address len -- set a watch point (watch_num) so
+       any change at that byte address for <len> bytes in data memory will be
+       printed during program execution with gss command
+     - format 5:  wa watch_num address : value0 value1 ... -- set a watch point
+       (watch_num) so that the program (run with gss) will be halted when the
+       memory span at that location location equals the values specified
+     NOTE: for watchpoints to work, you must use gss command to run the program
 
-    WR memory_location_wa value1 [value2 [value3 ...]]
-    Write a 32-bit value to a raw (offset from beginning of full PRU memory block - all PRUs)
-    memory_location is a 32-bit word index from the beginning of the PRU subsystem memory block
+WR <address> value1 [value2 [value3 ...]]
+    Write a byte value to a raw (offset from beginning of full PRU memory
+    block--all PRUs)
+    <address> is a byte address from the beginning of the PRU subsystem memory
+    block
 
-    WRD memory_location_wa value1 [value2 [value3 ...]]
-    Write a 32-bit value to PRU data memory (32-bit word offset from beginning of PRU data memory)
+WRD <address> value1 [value2 [value3 ...]]
+    Write a byte value to PRU data memory (byte offset from beginning of PRU
+    data memory)
 
-    WRI memory_location_wa value1 [value2 [value3 ...]]
-    Write a 32-bit value to PRU instruction memory (32-bit word offset from beginning of PRU instruction memory)
+WRI <address> value1 [value2 [value3 ...]]
+    Write a byte value to PRU instruction memory (byte offset from beginning of
+    PRU instruction memory)
 
 A brief version of help is available with the command hb
-
-
-
-
+```

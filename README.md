@@ -1,4 +1,4 @@
-NOTE: THIS IS NOT MY CODE. I'm hosting this here to back up my own changes in case my laptop and BeagleBone get
+**NOTE:** THIS IS NOT MY CODE. I'm hosting this here to back up my own changes in case my laptop and BeagleBone get
 lost in a fire or something. 
 
 
@@ -60,11 +60,16 @@ CONTRIBUTORS
 INSTALLATION
 ---------------------------------------------------------------------
 To build just run make in the source code directory (make sure you have the correct cross-compiler in place and in the path - 
-arm-none-linux-gnueabi-gcc).  The binary is called prudebug.
+arm-none-linux-gnueabi-gcc). You may also need to run 
+```sh
+sudo apt-get install libreadline-dev
+```
+to install the readline library. The binary is called prudebug.
 
 
 USAGE
 ---------------------------------------------------------------------
+```
 Usage: prudebug [-a pruss-address] [-u] [-m] [-p processor]
     -a - pruss-address is the memory address of the PRU in ARM memory space
     -u - force the use of UIO to map PRU memory space
@@ -73,6 +78,9 @@ Usage: prudebug [-a pruss-address] [-u] [-m] [-p processor]
     -p - select processor to use (sets the PRU memory locations)
         AM1707 - AM1707
         AM335X - AM335x
+        AM57X1 - AM57x1
+        AM57X2 - AM57x2
+```
 
 Generally the -a option should not be used.  If it is used, then prudebug will use the -a address for the PRU base with
 the selected processor as the various PRU subsystem offsets.  -u and -m control the way the PRU base address is mapped for

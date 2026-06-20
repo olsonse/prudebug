@@ -25,7 +25,7 @@ void printhelp()
 			"display the next\n");
 	printf("      block\n\n");
 
-	printf("BR [breakpoint_number [address]]\n");
+	printf("BR [breakpoint_number [address [s]]]\n");
 	printf("    View or set an instruction breakpoint\n");
 	printf("     - 'b' by itself will display current breakpoints\n");
 	printf("     - breakpoint_number is the breakpoint reference and ranges"
@@ -33,6 +33,7 @@ void printhelp()
 	printf("     - address is the instruction word address that the "
 			"processor should stop\n");
 	printf("       at (instruction is not executed)\n");
+	printf("     - \"s\" forces it to be a software breakpoint that requires single-stepping and may break real-time performance\n");
 	printf("     - if no address is provided, then the breakpoint is "
 			"cleared\n\n");
 
@@ -73,6 +74,13 @@ void printhelp()
 	printf("    or given as '0', stepping will continue until otherwise "
 			"interrupted.\n\n");
 
+	printf("TRACE [<k_elements>] [<stop_on_halt> [<filename>]]\n");
+	printf("    Start processor execution while sampling its program counter]\n");
+	printf("    - <k_elements> how many thousand elements to store (defaults to 1)\n");
+	printf("    - if <stop_on_halt> is true, it will stop automatically when a HALT\n");
+	printf("      instruction is encountered. This will result in lower sampling rate.\n");
+	printf("    - if <filename> is passed, the trace will be written to it instead of stdout\n\n");
+
 	printf("HALT\n");
 	printf("    Halt the processor\n\n");
 
@@ -80,6 +88,9 @@ void printhelp()
 	printf("    Load program file into instruction memory at 32-bit word "
 			"address provided\n");
 	printf("    (offset from beginning of instruction memory\n\n");
+	printf("J address\n");
+	printf("    Move the program counter to the specified address (absolute or relative). If <address> is not provided, jumps to +1\n\n");
+
 
 	printf("PRU <pru_number>\n");
 	printf("    Set the active PRU where pru_number ranges from 0 to %u\n",
@@ -90,8 +101,20 @@ void printhelp()
 	printf("Q\n");
 	printf("    Quit the debugger and return to shell prompt.\n\n");
 
-	printf("R [value]\n");
-	printf("    Display or modify the current PRU registers.\n\n");
+	printf("R\n");
+	printf("    Display current PRU registers.\n\n");
+
+	printf("Rx [value]\n");
+	printf("     Display or modify register value, e.g.:\n");
+	printf("     R2 // prints R2 \n");
+	printf("     R2 0x01234 // set R2 to 0x1234 \n\n");
+
+	printf("C\n");
+	printf("    Display current PRU constant table.\n\n");
+
+	printf("Cx [value]\n");
+	printf("     Display value from the constant table, e.g.:\n");
+	printf("     C2 // prints C2 \n");
 
 	printf("RESET\n");
 	printf("    Reset the current PRU\n\n");
@@ -159,13 +182,14 @@ void printhelp()
 void printhelpbrief()
 {
 	printf("Command help\n\n");
-	printf("    BR [breakpoint_number [address]] - View or set an instruction breakpoint\n");
+	printf("    BR [breakpoint_number [address [s]]] - View or set an instruction breakpoint, \"s\" makes it a software breakpoint\n");
 	printf("    D <address> [length] - Raw dump of PRU data memory (byte offset from beginning of full PRU memory block - all PRUs)\n");
 	printf("    DD <address> [length] - Dump data memory (byte offset from beginning of PRU data memory)\n");
 	printf("    DI <address> [length] - Dump instruction memory (byte offset from beginning of PRU instruction memory)\n");
 	printf("    DIS <32bit-address> [length] - Disassemble instruction memory (32-bit word offset from beginning of PRU instruction memory)\n");
 	printf("    G - Start processor execution of instructions (at current IP)\n");
 	printf("    GSS - Start processor execution using automatic single stepping - this allows running a program with breakpoints\n");
+	printf("    TRACE [<stop_on_halt> [<filename>]] - Start processor execution while sampling its program counter]\n");
 	printf("    HALT - Halt the processor\n");
 	printf("    L <32bit-address> file_name - Load program file into instruction memory\n");
 	printf("    PRU pru_number - Set the active PRU where pru_number ranges from 0 to %u\n", NUM_OF_PRU - 1);

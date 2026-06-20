@@ -8,6 +8,7 @@
 
 #ifndef PRUDBG_H
 #define PRUDBG_H
+#include <stdint.h>
 
 // default processor to use if none is specified on the command line when prudebug is started
 #define DEFAULT_PROCESSOR_INDEX	AM335x
@@ -17,7 +18,10 @@
 // in the prudbg.c file.
 #define AM1707			0
 #define AM335x			1
-
+#define AM57x1			2
+#define AM57x2			3
+#define XJ721E			4
+#define AM62xx			5
 
 // general settings
 #define MAX_CMD_LEN		25
@@ -31,12 +35,15 @@
 #define MAX_WATCH		10
 #define MAX_WATCH_LEN		32
 #define MAX_PROC_NAME		20
+#define NUM_REGS		32
 
 // register offsets [4-byte word address offsets]
 #define PRU_CTRL_REG		0x0000
 #define PRU_STATUS_REG		0x0001
 #define PRU_CYCLE_REG		0x0003
-#define PRU_INTGPR_REG		0x0100
+#define PRU_STALL_REG		0x0004
+#define PRU_INTGPR_REG		0x0100 // GPREG0
+#define PRU_INTCT_REG		0x0120 // CT_REG0
 
 // PRU control register bit flags
 #define PRU_REG_PCRESET_MASK	0x0000FFFF
@@ -46,6 +53,8 @@
 #define PRU_REG_SLEEPING	0x00000004
 #define PRU_REG_PROC_EN		0x00000002
 #define PRU_REG_SOFT_RESET	0x00000001
+
+#define INST_HALT 0x2a000000
 
 // defines for PRU memory mapping method requeste by user
 #define ACCESS_GUESS		0
@@ -75,7 +84,9 @@
 // global structures
 struct breakpoints {
 	unsigned char		state;
+	unsigned char		hw;
 	unsigned int		address;
+	uint32_t		instruction;
 };
 
 struct watchvariable {
@@ -88,7 +99,7 @@ struct watchvariable {
 
 
 // global variables
-extern unsigned int		*pru;
+extern volatile unsigned int	*pru;
 extern unsigned int		pru_inst_base[], pru_ctrl_base[], pru_data_base[];
 extern unsigned int		pru_num;
 extern struct breakpoints	bp[MAX_NUM_OF_PRUS][MAX_BREAKPOINTS];
@@ -97,7 +108,7 @@ extern struct watchvariable	wa[MAX_NUM_OF_PRUS][MAX_WATCH];
 
 // function prototypes
 void cmd_print_breakpoints();
-void cmd_set_breakpoint (unsigned int bpnum, unsigned int addr);
+void cmd_set_breakpoint (unsigned int bpnum, unsigned int addr, unsigned int hw);
 void cmd_clear_breakpoint (unsigned int bpnum);
 int cmd_input(char *prompt, char *cmd, char *cmdargs, unsigned int *argptrs,
 	      unsigned int *numargs);
@@ -110,10 +121,13 @@ int cmd_loadprog(unsigned int addr, char *fn);
 void cmd_run();
 void cmd_runss(long count);
 void cmd_single_step(unsigned int N);
+void cmd_trace(unsigned int k_elements, unsigned int on_halt, const char* filename);
 void cmd_halt();
+void cmd_jump(unsigned int addr);
+void cmd_jump_relative(int jump);
 void cmd_soft_reset();
 void cmd_dis (int offset, int addr, int len);
-void disassemble(char *str, unsigned int inst);
+void disassemble(char *str, unsigned int len, unsigned int inst);
 
 void cmd_print_watch();
 void cmd_clear_watch (unsigned int wanum);
@@ -121,14 +135,21 @@ void cmd_set_watch_any (unsigned int wanum, unsigned int addr, unsigned int len)
 void cmd_set_watch (unsigned int wanum, unsigned int addr,
 		    unsigned int len, unsigned char * value);
 
-void cmd_printregs();
-void cmd_printreg(unsigned int i);
+void cmd_load_reg_names(const char* filename);
+enum RegOrConst {
+	kReg = 0,
+	kConst = 1,
+};
+void cmd_printrcs(enum RegOrConst type);
+void cmd_printrc(unsigned int i, enum RegOrConst type);
+void cmd_printconst(unsigned int i);
 void cmd_setreg(int i, unsigned int value);
 void cmd_print_ctrlreg_uint(const char * name, unsigned int i);
 void cmd_print_ctrlreg_uint(const char * name, unsigned int i);
 void cmd_set_ctrlreg(unsigned int i, unsigned int value);
 void cmd_set_ctrlreg_bits(unsigned int i, unsigned int bits);
 void cmd_clr_ctrlreg_bits(unsigned int i, unsigned int bits);
+void cmd_free();
 
 void printhelp();
 void printhelpbrief();

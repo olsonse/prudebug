@@ -17,8 +17,71 @@
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <string.h>
+#include <errno.h>
+#include <signal.h>
+#include <stdlib.h>
 
 #include "prudbg.h"
+
+static char* reg_names[NUM_REGS];
+
+unsigned int get_status(){
+	return pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG];
+}
+
+static unsigned int get_program_counter()
+{
+	return get_status() & 0xFFFF;
+}
+
+static uint32_t get_instruction(unsigned int addr)
+{
+	return pru[pru_inst_base[pru_num] + addr];
+}
+
+static inline unsigned int br_get_offset(unsigned int i)
+{
+	return pru_inst_base[pru_num] + bp[pru_num][i].address;
+}
+
+static inline void run_hw_disable(unsigned int i)
+{
+	unsigned int offset = br_get_offset(i);
+	pru[offset] = bp[pru_num][i].instruction;
+}
+
+static void run_hw_disable_all()
+{
+	for (unsigned int i=0; i<MAX_BREAKPOINTS; i++) {
+		if (bp[pru_num][i].state == BP_ACTIVE && bp[pru_num][i].hw) {
+			run_hw_disable(i);
+		}
+	}
+}
+
+static inline void run_hw_enable(unsigned int i)
+{
+	unsigned int offset = br_get_offset(i);
+	bp[pru_num][i].instruction = pru[offset];
+	pru[offset] = INST_HALT;
+}
+
+static void run_hw_enable_all()
+{
+	for (unsigned int i=0; i<MAX_BREAKPOINTS; i++) {
+		if (bp[pru_num][i].state == BP_ACTIVE && bp[pru_num][i].hw) {
+			run_hw_enable(i);
+		}
+	}
+}
+
+static volatile int loop_should_stop;
+
+static void loop_signal_handler(int signum) {
+	if (signum == SIGINT) {
+		loop_should_stop = 1;
+	}
+}
 
 // breakpoint management
 void cmd_print_breakpoints()
@@ -28,7 +91,7 @@ void cmd_print_breakpoints()
 	printf("##  Address\n");
 	for (i=0; i<MAX_BREAKPOINTS; i++) {
 		if (bp[pru_num][i].state == BP_ACTIVE) {
-			printf("%02u  0x%04x\n", i, bp[pru_num][i].address);
+			printf("%02u  0x%04x %s\n", i, bp[pru_num][i].address, bp[pru_num][i].hw ? "hw" : "sw");
 		} else {
 			printf("%02u  UNUSED\n", i);
 		}
@@ -37,10 +100,22 @@ void cmd_print_breakpoints()
 }
 
 // set breakpoint
-void cmd_set_breakpoint (unsigned int bpnum, unsigned int addr)
+void cmd_set_breakpoint (unsigned int bpnum, unsigned int addr, unsigned int hw)
 {
-	bp[pru_num][bpnum].state = BP_ACTIVE;
-	bp[pru_num][bpnum].address = addr;
+	int found = -1;
+	for (unsigned int i=0; i<MAX_BREAKPOINTS; i++) {
+		if(i != bpnum) {
+			if(BP_ACTIVE == bp[pru_num][i].state && bp[pru_num][i].address == addr)
+				found = i;
+		}
+	}
+	if (found >= 0) {
+		fprintf(stderr, "Error: trying to insert breakpoint %d at addr %#x, but %d is already set at that address\n", bpnum, addr, found);
+	} else {
+		bp[pru_num][bpnum].state = BP_ACTIVE;
+		bp[pru_num][bpnum].address = addr;
+		bp[pru_num][bpnum].hw = hw;
+	}
 }
 
 // clear breakpoint
@@ -89,16 +164,16 @@ void cmd_dis (int offset, int addr, int len)
 {
 	int			i, k;
 	char			inst_str[50];
-	unsigned int		status_reg;
+	unsigned int		program_counter;
 	const char		*br_str[] = {" ", "*"};
 	int			on_br = 0;
 	const char		*pc[] = {"  ", ">>"};
 	int			pc_on = 0;
 
-	status_reg = (pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG]) & 0xFFFF;
+	program_counter = get_program_counter();
 
 	for (i=0; i<len; i++) {
-		pc_on = (status_reg == (addr + i)) ? 1 : 0;
+		pc_on = (program_counter == (addr + i)) ? 1 : 0;
 
 		on_br = 0;
 		for (k=0; k<MAX_BREAKPOINTS; ++k) {
@@ -109,7 +184,7 @@ void cmd_dis (int offset, int addr, int len)
 			}
 		}
 
-		disassemble(inst_str, pru[offset+addr+i]);
+		disassemble(inst_str, sizeof(inst_str), pru[offset+addr+i]);
 		printf("[0x%04x] 0x%08x %s %s %s\n",
 		       addr+i, pru[offset+addr+i], br_str[on_br], pc[pc_on],
 		       inst_str);
@@ -146,7 +221,7 @@ int cmd_loadprog(unsigned int addr, char *fn)
 		if (f == -1) {
 			printf("ERROR: could not open file 2\n");
 		} else {
-			if (read(f, &pru[pru_inst_base[pru_num] + addr], file_info.st_size) < 0) {
+			if (read(f, (unsigned int*)&pru[pru_inst_base[pru_num] + addr], file_info.st_size) < 0) {
 				perror("loadprog");
 			}
 			close(f);
@@ -156,16 +231,44 @@ int cmd_loadprog(unsigned int addr, char *fn)
 	return 0;
 }
 
-// print current PRU registers
-void cmd_printregs()
+static void free_reg_names() {
+	for (size_t n = 0; n < NUM_REGS; ++n)
+		free(reg_names[n]);
+}
+
+void cmd_load_reg_names(const char* filename)
 {
-	unsigned int		ctrl_reg, reset_pc, status_reg;
+	FILE* stream = fopen(filename, "r");
+	if (!stream) {
+		fprintf(stderr, "Error while reading register names from %s\n", filename);
+		return;
+	}
+	free_reg_names();
+	int ret;
+	do {
+		int reg = -1;
+		char name[50] = "";
+		ret = fscanf(stream, "%*[rR]%d %49s\n", &reg, name);
+		printf("Ret: %d, reg: %d, name: %s\n", ret, reg, name);
+		if(2 == ret && ret < NUM_REGS) {
+			free(reg_names[reg]); // in case we are overwriting one that we just created
+			reg_names[reg] = strdup(name);
+		}
+	} while(ret && EOF != ret && !ferror(stream));
+	if(EOF == ret || ferror(stream))
+		fprintf(stderr, "Error while reading register names from %s\n", filename);
+	fclose(stream);
+}
+
+// print current PRU registers
+void cmd_printrcs(enum RegOrConst type)
+{
+	unsigned int		ctrl_reg, reset_pc;
 	char			*run_state, *single_step, *cycle_cnt_en, *pru_sleep, *proc_en;
 	unsigned int		i;
 	char			inst_str[50];
 
 	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
-	status_reg = pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG];
 	reset_pc = (ctrl_reg >> 16);
 	if (ctrl_reg&PRU_REG_RUNSTATE)
 		run_state = "RUNNING";
@@ -192,41 +295,67 @@ void cmd_printregs()
 	else
 		proc_en = "PROC_DISABLED";
 
-	printf("Register info for PRU%u\n", pru_num);
+	printf("%s info for PRU%u\n", kReg == type ? "Register" : "Constant", pru_num);
 	printf("    Control register: 0x%08x\n", ctrl_reg);
 	printf("      Reset PC:0x%04x  %s, %s, %s, %s, %s\n\n", reset_pc, run_state, single_step, cycle_cnt_en, pru_sleep, proc_en);
 
-	disassemble(inst_str, pru[pru_inst_base[pru_num] + (status_reg&0xFFFF)]);
-	printf("    Program counter: 0x%04x\n", (status_reg&0xFFFF));
+	if(get_program_counter() > 0x1000) {
+		snprintf(inst_str, sizeof(inst_str), "PC_OUT_OF_RANGE");
+	} else if(ctrl_reg&PRU_REG_RUNSTATE) {
+		snprintf(inst_str, sizeof(inst_str), "not available since PRU is RUNNING");
+	} else {
+		disassemble(inst_str, sizeof(inst_str), get_instruction(get_program_counter()));
+	}
+	printf("    Program counter: 0x%04x\n", get_program_counter());
 	printf("      Current instruction: %s\n", inst_str);
-	printf("      Cycle counter: %u\n\n", pru[pru_ctrl_base[pru_num] + PRU_CYCLE_REG]);
+	printf("      Cycle counter: %u, stall counter: %u\n\n", pru[pru_ctrl_base[pru_num] + PRU_CYCLE_REG], pru[pru_ctrl_base[pru_num] + PRU_STALL_REG]);
 
 	if (ctrl_reg&PRU_REG_RUNSTATE) {
-		printf("    Rxx registers not available since PRU is RUNNING.\n");
+		printf("    %s not available since PRU is RUNNING.\n", kReg == type ? "Rxx registers" : "Cxx constants");
 	} else {
-		for (i=0; i<8; i++)
-      printf("    R%02u: 0x%08x    R%02u: 0x%08x    R%02u: 0x%08x    R%02u: 0x%08x\n",
-             i,    pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i],
-             i+8,  pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 8],
-             i+16, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 16],
-             i+24, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 24]);
+#define NUM_COLS 4
+		unsigned int names_len[NUM_COLS] = {};
+		unsigned int num_rows = NUM_REGS / NUM_COLS;
+		for(unsigned int reg = 0; reg < NUM_REGS; ++reg)
+		{
+			if(reg_names[reg]) {
+				unsigned int c = reg / num_rows;
+				int strl = strlen(reg_names[reg]) ;
+				names_len[c] = strl > names_len[c] ? strl : names_len[c];
+			}
+		}
+		unsigned int offset = kReg == type ? PRU_INTGPR_REG : PRU_INTCT_REG;
+		for (i = 0; i < num_rows; i++) {
+			for (unsigned int c = 0; c < NUM_COLS; ++c) {
+				unsigned int reg = i + c * num_rows;
+				printf("%c%02u", kReg == type ? 'R' : 'C', reg);
+				char const* name = reg_names[reg];
+				if(names_len[c])
+					printf(" %*s", names_len[c], name ? name : "");
+
+				printf(": 0x%08x   ", pru[pru_ctrl_base[pru_num] + offset + reg]);
+			}
+			printf("\n");
+		}
 	}
 
 	printf("\n");
 }
 
 // print current single specific PRU registers
-void cmd_printreg(unsigned int i)
+void cmd_printrc(unsigned int i, enum RegOrConst type)
 {
-	unsigned int		ctrl_reg;
+	unsigned int ctrl_reg;
 
 	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
 
 	if (ctrl_reg&PRU_REG_RUNSTATE) {
 		printf("Rxx registers not available since PRU is RUNNING.\n");
 	} else {
-		printf("R%02u: 0x%08x\n\n",
-		       i, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i]);
+		unsigned int offset = kReg == type ? PRU_INTGPR_REG : PRU_INTCT_REG;
+		printf("%c%02u: 0x%08x\n\n",
+		       kReg == type ? 'R' : 'C',
+		       i, pru[pru_ctrl_base[pru_num] + offset + i]);
 	}
 }
 
@@ -274,6 +403,38 @@ void cmd_clr_ctrlreg_bits(unsigned int i, unsigned int bits)
 	pru[pru_ctrl_base[pru_num] + i] &= ~bits;
 }
 
+static void ctrl_set(unsigned int ctrl){
+	pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl;
+}
+
+static unsigned int ctrl_get(){
+	return pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
+}
+
+static unsigned int ctrl_get_pcreset(){
+	return ctrl_get() >> 16;
+}
+
+static void ctrl_set_pcreset(unsigned int address){
+	unsigned int ctrl_reg = ctrl_get();
+	ctrl_reg &= 0xffff; // mask out the upper 16 bit
+	ctrl_reg |= (address << 16); // and replaced them with the new address
+	ctrl_set(ctrl_reg);
+}
+
+void cmd_jump_relative(int jump){
+	cmd_jump(get_program_counter() + jump);
+}
+
+void cmd_jump(unsigned int address){
+	ctrl_set_pcreset(address);
+	cmd_halt();
+
+	cmd_soft_reset();
+	unsigned int reset = ctrl_get_pcreset();
+	printf("We are now at: 0x%04x\n", reset);
+}
+
 // start PRU running
 void cmd_run()
 {
@@ -294,17 +455,38 @@ void cmd_runss(long count)
 	unsigned int		done = 0;
 	unsigned int		ctrl_reg;
 	unsigned long		t_cyc = 0;
-	fd_set			rd_fdset;
-	struct timeval		tv;
-	int			r;
 
 	if (count > 0) {
 		printf("Running (will run for %ld steps or until a breakpoint is hit or a key is pressed)....\n", count);
 	} else {
 		count = -1;
-		printf("Running (will run until a breakpoint is hit or a key is pressed)....\n");
+		printf("Running (will run until a breakpoint is hit or ctrl-C is pressed)....\n");
+	}
+	unsigned int hw_break = 0;
+	unsigned int sw_break = 0;
+	unsigned int sw_watch = 0;
+	int is_on_breakpoint = -1;
+	addr = get_program_counter();
+	for (i=0; i<MAX_BREAKPOINTS; i++) {
+		if (bp[pru_num][i].state == BP_ACTIVE) {
+			if(bp[pru_num][i].hw) {
+				hw_break++;
+				if(bp[pru_num][i].address == addr)
+					is_on_breakpoint = i;
+			} else {
+				sw_break++;
+			}
+		}
+	}
+	for (i=0; i<MAX_WATCH; ++i) {
+		if (wa[pru_num][i].state != WA_UNUSED)
+			sw_watch++;
 	}
 
+	int run_hw = !sw_watch && !sw_break && count < 0;
+	int run_hw_hit = -1;
+
+	signal(SIGINT, loop_signal_handler);
 	// enter single-step loop
 	do {
 		// decrease count
@@ -312,22 +494,51 @@ void cmd_runss(long count)
 			--count;
 
 		// prep some 'select' magic to detect keypress to escape
-		FD_ZERO(&rd_fdset);
-		FD_SET(STDIN_FILENO, &rd_fdset);
-		tv.tv_sec = 0;
-		tv.tv_usec = 0;
 
-		// set single step mode and enable processor
-		ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
-		ctrl_reg |= PRU_REG_PROC_EN | PRU_REG_SINGLE_STEP;
-		pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
+		if (run_hw) {
+			printf("Running with hw breakpoints (real-time performance guaranteed%s)\n", is_on_breakpoint ? " after the first instruction" : "");
+			run_hw_enable_all();
+			if(is_on_breakpoint >= 0) {
+				run_hw_disable(is_on_breakpoint);
+				// single-step exactly once with this breakpoint disabled
+				ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
+				ctrl_reg |= PRU_REG_PROC_EN | PRU_REG_SINGLE_STEP;
+				ctrl_reg &= ~PRU_REG_SINGLE_STEP;
+				while(addr == get_program_counter())
+					;
+				// once we've stepped and gotten out of the breakpoint,
+				// re-enable it
+				run_hw_enable(is_on_breakpoint);
+			}
+			// run as usual, it will stop when it hits one of the
+			// HALT we added in run_hw_enable_all()
+			cmd_run();
+			// wait until we reach HALT or a keypress
+			while(!loop_should_stop)
+			{
+				usleep(50000);
+				if(get_instruction(get_program_counter()) == INST_HALT) {
+					done = 1;
+					break;
+				}
+			}
+		} else {
+			printf("Running with sw single-stepping (real-time performance not guaranteed)\n");
+			// set single step mode and enable processor
+			ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
+			ctrl_reg |= PRU_REG_PROC_EN | PRU_REG_SINGLE_STEP;
+			pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
+		}
 
 		// check if we've hit a breakpoint
-		addr = pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG] & 0xFFFF;
-		for (i=0; i<MAX_BREAKPOINTS; i++) if ((bp[pru_num][i].state == BP_ACTIVE) && (bp[pru_num][i].address == addr)) done = 1;
+		addr = get_program_counter();
+		for (i=0; i<MAX_BREAKPOINTS; i++) if ((bp[pru_num][i].state == BP_ACTIVE) && (bp[pru_num][i].address == addr)) {
+			done = 1;
+			if(run_hw)
+				run_hw_hit = i;
+		}
 
 		// check if we've hit a watch point
-//		addr = pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG] & 0xFFFF;
 		for (i=0; i<MAX_WATCH; ++i) {
 			unsigned char *pru_u8 = (unsigned char*)pru;
 
@@ -364,25 +575,26 @@ void cmd_runss(long count)
 		}
 
 		// check if we are on a HALT instruction - if so, stop single step execution
-		if (pru[pru_inst_base[pru_num] + addr] == 0x2a000000) {
-			printf("\nHALT instruction hit.\n");
+		if (get_instruction(addr) == INST_HALT) {
+			if(run_hw_hit != -1)
+				printf("\nBreakpoint %d hit at %#x.\n", run_hw_hit, addr);
+			else
+				printf("\nHALT instruction hit.\n");
 			done = 1;
 		}
 
-		// check if the user has attempted to stop execution of the PRU with a keypress
-		r = select (STDIN_FILENO+1, &rd_fdset, NULL, NULL, &tv);
 
 		// increase time
 		t_cyc++;
-	} while ((!done) && (r == 0) && (count != 0));
-
-	// if there is a character in the stdin queue, read the character
-	if (r > 0) getchar();
+	} while (!loop_should_stop && (!done) && (count != 0));
+	if(run_hw) {
+		run_hw_disable_all();
+	}
 
 	printf("\n");
 
 	// print the registers
-	cmd_printregs();
+	cmd_printrcs(kReg);
 
 	// disable single step mode and disable processor
 	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
@@ -404,13 +616,73 @@ void cmd_single_step(unsigned int N)
 	}
 
 	// print the registers
-	cmd_printregs();
+	cmd_printrcs(kReg);
 
 	// disable single step mode and disable processor
 	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
 	ctrl_reg &= ~PRU_REG_PROC_EN;
 	ctrl_reg &= ~PRU_REG_SINGLE_STEP;
 	pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
+}
+
+void cmd_trace(unsigned int k_elements, unsigned int on_halt, const char* filename)
+{
+	size_t len = k_elements * 1000;
+	uint16_t* trace = (uint16_t*)calloc(sizeof(uint16_t), len);
+	if(!trace) {
+		fprintf(stderr, "trace: couldn't allocate memory\n");
+		return;
+	}
+	unsigned int count = 0;
+	printf("Running trace for %u k elements ... press ctrl-C to stop%s\n", k_elements, on_halt ? " or it will stop on halt" : "");
+	loop_should_stop = 0;
+	signal(SIGINT, loop_signal_handler);
+	count = 1;
+	trace[0] = get_program_counter();
+	cmd_run();
+	while (count < len && !loop_should_stop) {
+		int addr = get_program_counter();
+		if (addr != trace[count - 1])
+			trace[count++] = addr;
+		if (on_halt) {
+			if(INST_HALT == get_instruction(addr))
+				break;
+		}
+	}
+	if (filename) {
+		FILE* stream = fopen(filename, "w");
+		char str[10];
+		if (!stream) {
+			fprintf(stderr, "Error %d %s while creating %s\n", errno, strerror(errno), filename);
+			goto cleanup;
+		}
+		for (size_t n = 0; n < count; ++n)
+		{
+			snprintf(str, sizeof(str), "0x%04x\n", trace[n]);
+			size_t ret = fwrite(str, strlen(str), 1, stream);
+			if(ret != 1) {
+				fprintf(stderr, "Error while writing to file %s. It may be truncated\n", filename);
+				break;
+			}
+		}
+		int ret = fclose(stream);
+		if (ret) {
+			fprintf(stderr, "Error %d %s while closing file %s\n", errno, strerror(errno), filename);
+			goto cleanup;
+		}
+		printf("Trace written to %s\n", filename);
+	} else {
+		printf("Trace [%d]:\n", count);
+		for(size_t n = 0; n < count; ++n)
+		{
+			printf("0x%04x ", trace[n]);
+			if((count % 16) == 15)
+				printf("\n");
+		}
+		printf("\n");
+	}
+cleanup:
+	free(trace);
 }
 
 void cmd_soft_reset()
@@ -483,4 +755,6 @@ void cmd_set_watch (unsigned int wanum, unsigned int addr,
 	       min(len, MAX_WATCH_LEN));
 }
 
-
+void cmd_free() {
+	free_reg_names();
+}

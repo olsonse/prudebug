@@ -20,25 +20,25 @@
 #include "prudbg.h"
 
 // util function to decode BurstLen in Format 6 instructions
-void GetBurstLen(char *tempstr, unsigned int BurstLen)
+void GetBurstLen(char *tempstr, unsigned int len, unsigned int BurstLen)
 {
 	if (BurstLen < 124) {
-		sprintf(tempstr, "%u", BurstLen+1);
+		snprintf(tempstr, len, "%u", BurstLen+1);
 	} else if (BurstLen == 124) {
-		sprintf(tempstr, "b0");
+		snprintf(tempstr, len, "b0");
 	} else if (BurstLen == 125) {
-		sprintf(tempstr, "b1");
+		snprintf(tempstr, len, "b1");
 	} else if (BurstLen == 126) {
-		sprintf(tempstr, "b2");
+		snprintf(tempstr, len, "b2");
 	} else if (BurstLen == 127) {
-		sprintf(tempstr, "b3");
+		snprintf(tempstr, len, "b3");
 	} else {
-		sprintf(tempstr, "XX");
+		snprintf(tempstr, len, "XX");
 	}
 }
 
 // disassemble the inst instruction and place string in str
-void disassemble(char *str, unsigned int inst)
+void disassemble(char *str, unsigned int len, unsigned int inst)
 {
 	unsigned short		Imm;
 	unsigned char		OP, ALUOP, Rs2Sel, Rs2, Rs1Sel, Rs1, RdSel, Rd, IO, Imm2, SUBOP, Test;
@@ -53,7 +53,7 @@ void disassemble(char *str, unsigned int inst)
 					"SET"};
 	char			*f2_inst[] = {
 					"JMP", "JAL", "LDI", "LMBD", "SCAN",
-					"HALT", "RESERVED", "RESERVED", "LOOP",
+					"HALT", "MVI", "RESERVED", "LOOP",
 					"RESERVED", "RESERVED", "RESERVED",
 					"RESERVED", "RESERVED", "RESERVED",
 					"SLP"};
@@ -76,11 +76,11 @@ void disassemble(char *str, unsigned int inst)
 			Rd = (inst & 0x0000001F);
 			if (IO) {
 				Imm2 = (inst & 0x00FF0000) >> 16;
-				sprintf(str, "%s R%u%s, R%u%s, 0x%02x", f1_inst[ALUOP], Rd, sis[RdSel], Rs1, sis[Rs1Sel], Imm2);
+				snprintf(str, len,"%s R%u%s, R%u%s, 0x%02x", f1_inst[ALUOP], Rd, sis[RdSel], Rs1, sis[Rs1Sel], Imm2);
 			} else {
 				Rs2Sel = (inst & 0x00E00000) >> 21;
 				Rs2 = (inst & 0x001F0000) >> 16;
-				sprintf(str, "%s R%u%s, R%u%s, R%u%s", f1_inst[ALUOP], Rd, sis[RdSel], Rs1, sis[Rs1Sel], Rs2, sis[Rs2Sel]);
+				snprintf(str, len,"%s R%u%s, R%u%s, R%u%s", f1_inst[ALUOP], Rd, sis[RdSel], Rs1, sis[Rs1Sel], Rs2, sis[Rs2Sel]);
 			}
 			break;
 
@@ -95,16 +95,16 @@ void disassemble(char *str, unsigned int inst)
 					if (IO) {
 						Imm = (inst & 0x00FFFF00) >> 8;
 						if (SUBOP == 0)
-							sprintf(str, "%s 0x%04x", f2_inst[SUBOP], Imm);
+							snprintf(str, len,"%s 0x%04x", f2_inst[SUBOP], Imm);
 						else
-							sprintf(str, "%s R%u%s, 0x%04x", f2_inst[SUBOP], Rd, sis[RdSel], Imm);
+							snprintf(str, len,"%s R%u%s, 0x%04x", f2_inst[SUBOP], Rd, sis[RdSel], Imm);
 					} else {
 						Rs2Sel = (inst & 0x00E00000) >> 21;
 						Rs2 = (inst & 0x001F0000) >> 16;
 						if (SUBOP == 0)
-							sprintf(str, "%s R%u%s", f2_inst[SUBOP], Rs2, sis[Rs2Sel]);
+							snprintf(str, len,"%s R%u%s", f2_inst[SUBOP], Rs2, sis[Rs2Sel]);
 						else
-							sprintf(str, "%s R%u%s, R%u%s", f2_inst[SUBOP], Rd, sis[RdSel], Rs2, sis[Rs2Sel]);
+							snprintf(str, len,"%s R%u%s, R%u%s", f2_inst[SUBOP], Rd, sis[RdSel], Rs2, sis[Rs2Sel]);
 					}
 					break;
 
@@ -112,7 +112,7 @@ void disassemble(char *str, unsigned int inst)
 					Imm = (inst & 0x00FFFF00) >> 8;
 					RdSel = (inst & 0x000000E0) >> 5;
 					Rd = (inst & 0x0000001F);
-					sprintf(str, "%s R%u%s, 0x%04x", f2_inst[SUBOP], Rd, sis[RdSel], Imm);
+					snprintf(str, len,"%s R%u%s, 0x%04x", f2_inst[SUBOP], Rd, sis[RdSel], Imm);
 					break;
 
 				case 3:  // LMBD
@@ -126,9 +126,9 @@ void disassemble(char *str, unsigned int inst)
 					Imm2 = (inst & 0x00FF0000) >> 16;
 					
 					if (IO) {
-						sprintf(str, "%s R%u%s, R%u%s, 0x%04x", f2_inst[SUBOP], Rd, sis[RdSel], Rs1, sis[Rs1Sel], Imm2);
+						snprintf(str, len,"%s R%u%s, R%u%s, 0x%04x", f2_inst[SUBOP], Rd, sis[RdSel], Rs1, sis[Rs1Sel], Imm2);
 					} else {
-						sprintf(str, "%s R%u%s, R%u%s, R%u%s", f2_inst[SUBOP], Rd, sis[RdSel], Rs1, sis[Rs1Sel], Rs2, sis[Rs2Sel]);
+						snprintf(str, len,"%s R%u%s, R%u%s, R%u%s", f2_inst[SUBOP], Rd, sis[RdSel], Rs1, sis[Rs1Sel], Rs2, sis[Rs2Sel]);
 					}
 
 					break;
@@ -142,17 +142,138 @@ void disassemble(char *str, unsigned int inst)
 					Imm2 = (inst & 0x00FF0000) >> 16;
 
 					if (IO) {
-						sprintf(str, "%s R%u%s, 0x%04x", f2_inst[SUBOP], Rd, sis[RdSel], Imm2);
+						snprintf(str, len,"%s R%u%s, 0x%04x", f2_inst[SUBOP], Rd, sis[RdSel], Imm2);
 					} else {
-						sprintf(str, "%s R%u%s, R%u%s", f2_inst[SUBOP], Rd, sis[RdSel], Rs2, sis[Rs2Sel]);
+						snprintf(str, len,"%s R%u%s, R%u%s", f2_inst[SUBOP], Rd, sis[RdSel], Rs2, sis[Rs2Sel]);
 					}
 
 					break;
 
 				case 5:  // HALT
-					sprintf(str, "%s", f2_inst[SUBOP]);
+					snprintf(str, len,"%s", f2_inst[SUBOP]);
 					break;
-
+				case 6: // MVIB/MVIW/MIVIX
+				{
+					// only recognise a subset, those in CODE_MVI_PLUS in pasmop.c
+					// with args R1.bX
+					unsigned int err = 0;
+					unsigned int widthBits = (inst & 0x00030000) >> 16;
+					unsigned int itype = (inst & 0x01E00000) >> 21;//increment type
+					unsigned char hasPostInc[2];
+					unsigned char hasPreDec[2];
+					for(unsigned int n = 0; n < 2; ++n)
+					{
+						unsigned char bits = 0x3 & (itype >> ((1 - n) * 2));
+						hasPostInc[n] = bits == 2;
+						hasPreDec[n] = bits == 3;
+						// TODO: I think bits == 0 is a
+						// valid instruction, but with
+						// different args or something
+						// like that? Unsupported for now
+						if (0 == bits)
+							err = 1;
+					}
+					if(inst & (1 << 20))
+					{
+						// some three argument version? Unsupported for now
+						err = 2;
+					}
+					Rs1Sel = (inst & 0x0000E000) >> 13;
+					Rs1 = (inst & 0x00001F00) >> 8;
+					RdSel = (inst & 0x000000E0) >> 5;
+					Rd = (inst & 0x0000001F);
+					char const* widthStr;
+					switch(widthBits) {
+						case 0: // 1 byte
+							widthStr = "B";
+							break;
+						case 1: // 2 bytes
+							widthStr = "W";
+							break;
+						case 2: // 4 bytes
+							widthStr = "D";
+							break;
+						default:
+							err = 3;
+					}
+					if(err) {
+						snprintf(str, len,"UNKNOWN MVIx: %#x err: %d\n", inst, err);
+					} else {
+						snprintf(str, len,"%s%s *%sR%u%s%s, *%sR%u%s%s\n",
+							f2_inst[SUBOP], widthStr,
+							hasPreDec[0] ? "--" : "",
+							Rd, sis[RdSel],
+							hasPostInc[0] ? "++" : "",
+							hasPreDec[1] ? "--" : "",
+							Rs1,
+							sis[Rs1Sel],
+							hasPostInc[1] ? "++" : ""
+						);
+					}
+				}
+					break;
+				case 7: // XI/XOUT/XCHG
+				{
+					// OPCODE IM(253), Rdst, OP(124), n    -or-
+					// OPCODE IM(253), Rdst, bn
+					char* op = NULL;
+					switch((inst >> 23) & 0x5F) {
+						case 0x5D:
+							op = "XIN";
+							break;
+						case 0x5E:
+							op = "XOUT";
+							break;
+						case 0x5F:
+							op = "XCHG";
+							break;
+						default:
+							snprintf(str, len,"UNKNOWN-XI/XOUT: %#x\n", inst);
+							return;
+					}
+					// first argument is always an immediate
+					unsigned int imm0 = inst >> 15 & 0xff;
+					// Second argument is a REG, but pasmop.c shows
+					// it can be an immediate, too? If I understand the code
+					// right, and with a bit of a guesstimate, the opcode
+					// only allows for REG, but `pasm` tries to be clever
+					// and encode a number as a 5 bit register plus a FIELDTYPE.
+					// So, ultimately, when disassembling we only care about
+					// the register format
+					unsigned int arg1Val = inst & 0x7F;
+					// wX bitfields decay to bX
+					// because the allowed address
+					// range fits in it
+					char* bitFieldStr = "";
+					switch(0x3 & (inst >> 5)) {
+						case 0:
+							bitFieldStr = ".b0"; // could be left as ""
+							break;
+						case 1:
+							bitFieldStr = ".b1";
+							break;
+						case 2:
+							bitFieldStr = ".b2";
+							break;
+						case 3:
+							bitFieldStr = ".b3";
+							break;
+					}
+					unsigned int reg = arg1Val & 0x1F;
+					// third argument is an immediate if < 124,
+					// or a R0's bx byte otherwise
+					unsigned int arg2Val = (inst >> 7) & 0x7F;
+					char arg2Str[4];
+					if(arg2Val < 124) {
+						snprintf(arg2Str, sizeof(arg2Str),
+								"%d", arg2Val + 1); // encoded as imm -1
+					} else {
+						snprintf(arg2Str, sizeof(arg2Str),
+								"b%d", arg2Val - 124);
+					}
+					snprintf(str, len,"%s %d, &R%d%s, %s", op, imm0, reg, bitFieldStr, arg2Str);
+				}
+					break;
 				case 8: { // [I]LOOP
 					const char * I = (inst & (1<<15)) ? "I" : "";
 
@@ -163,20 +284,20 @@ void disassemble(char *str, unsigned int inst)
 					Imm2   = (inst & 0x00FF0000) >> 16;
 
 					if (IO) {
-						sprintf(str, "%s%s %d, 0x%04x", I, f2_inst[SUBOP], BrOff, Imm2);
+						snprintf(str, len,"%s%s %d, 0x%04x", I, f2_inst[SUBOP], BrOff, Imm2);
 					} else {
-						sprintf(str, "%s%s %d, R%u%s", I, f2_inst[SUBOP], BrOff, Rs2, sis[Rs2Sel]);
+						snprintf(str, len,"%s%s %d, R%u%s", I, f2_inst[SUBOP], BrOff, Rs2, sis[Rs2Sel]);
 					}
 					break;
 				}
 
 				case 15:  // SLP
 					Imm = (inst & 0x00800000) >> 23;
-					sprintf(str, "%s %u", f2_inst[SUBOP], Imm);
+					snprintf(str, len,"%s %u", f2_inst[SUBOP], Imm);
 					break;
 
 				default:
-					sprintf(str, "UNKNOWN-F2");
+					snprintf(str, len,"UNKNOWN-F2 %#x %#x", inst, SUBOP);
 					break;
 			}
 			break;
@@ -194,12 +315,12 @@ void disassemble(char *str, unsigned int inst)
 			if (BrOff & 0x0200) BrOff |= 0xFC00;
 
 			if (Test == 7) {
-				sprintf(str, "QBA %d", BrOff);
+				snprintf(str, len,"QBA %d", BrOff);
 			} else {
 				if (IO) {
-					sprintf(str, "QB%s %d, R%u%s, %u", f4_inst[Test], BrOff, Rs1, sis[Rs1Sel], Imm);
+					snprintf(str, len,"QB%s %d, R%u%s, %u", f4_inst[Test], BrOff, Rs1, sis[Rs1Sel], Imm);
 				} else {
-					sprintf(str, "QB%s %d, R%u%s, R%u%s", f4_inst[Test], BrOff, Rs1, sis[Rs1Sel], Rs2, sis[Rs2Sel]);
+					snprintf(str, len,"QB%s %d, R%u%s, R%u%s", f4_inst[Test], BrOff, Rs1, sis[Rs1Sel], Rs2, sis[Rs2Sel]);
 				}
 			}
 
@@ -217,9 +338,9 @@ void disassemble(char *str, unsigned int inst)
 			if (BrOff & 0x0200) BrOff |= 0xFC00;
 
 			if (IO) {
-				sprintf(str, "QB%s %d, R%u%s, %u", f5_inst[Test], BrOff, Rs1, sis[Rs1Sel], Imm);
+				snprintf(str, len,"QB%s %d, R%u%s, %u", f5_inst[Test], BrOff, Rs1, sis[Rs1Sel], Imm);
 			} else {
-				sprintf(str, "QB%s %d, R%u%s, R%u%s", f5_inst[Test], BrOff, Rs1, sis[Rs1Sel], Rs2, sis[Rs2Sel]);
+				snprintf(str, len,"QB%s %d, R%u%s, R%u%s", f5_inst[Test], BrOff, Rs1, sis[Rs1Sel], Rs2, sis[Rs2Sel]);
 			}
 			
 			break;
@@ -235,25 +356,25 @@ void disassemble(char *str, unsigned int inst)
 			Ro = (inst & 0x001F0000) >> 16;
 			Rb = (inst & 0x00001F00) >> 8;
 			Imm = (inst & 0x00FF0000) >> 16;
-			GetBurstLen(tempstr, BurstLen);
+			GetBurstLen(tempstr, sizeof(tempstr), BurstLen);
 
 			if (OP == 7) {
 				if (IO) {
-					sprintf(str, "%s R%u%s, R%u, %u, %s", f6_7_inst[LoadStore], Rx, bytenum[RxByteAddr], Rb, Imm, tempstr);
+					snprintf(str, len,"%s &R%u%s, R%u, %u, %s", f6_7_inst[LoadStore], Rx, bytenum[RxByteAddr], Rb, Imm, tempstr);
 				} else {
-					sprintf(str, "%s R%u%s, R%u, R%u%s, %s", f6_7_inst[LoadStore], Rx, bytenum[RxByteAddr], Rb, Ro, sis[RoSel], tempstr);
+					snprintf(str, len,"%s &R%u%s, R%u, R%u%s, %s", f6_7_inst[LoadStore], Rx, bytenum[RxByteAddr], Rb, Ro, sis[RoSel], tempstr);
 				}
 			} else {  // OP==4
 				if (IO) {
-					sprintf(str, "%s R%u%s, C%u, %u, %s", f6_4_inst[LoadStore], Rx, bytenum[RxByteAddr], Rb, Imm, tempstr);
+					snprintf(str, len,"%s &R%u%s, C%u, %u, %s", f6_4_inst[LoadStore], Rx, bytenum[RxByteAddr], Rb, Imm, tempstr);
 				} else {
-					sprintf(str, "%s R%u%s, C%u, R%u%s, %s", f6_4_inst[LoadStore], Rx, bytenum[RxByteAddr], Rb, Ro, sis[RoSel], tempstr);
+					snprintf(str, len,"%s &R%u%s, C%u, R%u%s, %s", f6_4_inst[LoadStore], Rx, bytenum[RxByteAddr], Rb, Ro, sis[RoSel], tempstr);
 				}
 			}
 			break;
 
 		default:
-			sprintf(str, "UNKNOWN");
+			snprintf(str, len,"UNKNOWN %#x", inst);
 			break;
 	}
 }

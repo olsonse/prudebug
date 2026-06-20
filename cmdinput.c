@@ -1,3 +1,4 @@
+// vim: noet:sw=8:ts=8:tw=80:nowrap
 /* 
  *
  *  PRU Debug Program - command input function
@@ -23,26 +24,41 @@
 
 #include "prudbg.h"
 
-static void interrupt_handler()
+volatile sig_atomic_t sigint_caught = 0;
+
+void sigint_handler(int sig)
 {
-	// readline's built-in handler doesn't actually clear the prompt, so we do it here
-	// See: https://stackoverflow.com/a/36960653
-	rl_free_line_state ();
-	rl_cleanup_after_signal ();
-	RL_UNSETSTATE(RL_STATE_ISEARCH|RL_STATE_NSEARCH|RL_STATE_VIMOTION|RL_STATE_NUMERICARG|RL_STATE_MULTIKEY);
-	rl_line_buffer[rl_point = rl_end = rl_mark = 0] = 0;
-	printf("\n>");
+	sigint_caught = 1;
+	printf("^C\n");
 	fflush(stdout);
 }
 
+/* readline event hook */
+int check_for_signals()
+{
+	if (sigint_caught) {
+		sigint_caught = 0; // reset for next time
+		rl_replace_line("", 0); // clear the input buffer
+		rl_on_new_line();	// Move to a new line
+		rl_redisplay();		// Redraw the prompt
+	}
+	return 0;
+}
+
+void prep_readline_for_prudebug()
+{
+	struct sigaction sa;
+	sa.sa_handler = sigint_handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART; // Resteart system calls if interrupted
+	sigaction(SIGINT, &sa, NULL);
+	rl_event_hook = check_for_signals; // Bind Readline's event hook
+}
 
 int cmd_input(char *prompt, char *cmd, char *cmdargs, unsigned int *argptrs, unsigned int *numargs)
 {
-	rl_catch_signals = 0;
-	rl_set_signals();
-	signal(SIGINT, interrupt_handler);
-	unsigned int		i, on_zero;
-	unsigned int full_len;
+	unsigned int	i, on_zero;
+	unsigned int	full_len;
 
 	// collect command until space or return
 	char * buf = readline (prompt);

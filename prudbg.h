@@ -110,6 +110,7 @@ extern struct watchvariable	wa[MAX_NUM_OF_PRUS][MAX_WATCH];
 void cmd_print_breakpoints();
 void cmd_set_breakpoint (unsigned int bpnum, unsigned int addr, unsigned int hw);
 void cmd_clear_breakpoint (unsigned int bpnum);
+void prep_readline_for_prudebug();
 int cmd_input(char *prompt, char *cmd, char *cmdargs, unsigned int *argptrs,
 	      unsigned int *numargs);
 void printhelp();

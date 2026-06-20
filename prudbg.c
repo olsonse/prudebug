@@ -420,6 +420,7 @@ int main(int argc, char *argv[])
 
 
 	// Command prompt handler
+	prep_readline_for_prudebug();
 	do {
 		// get command from user
 		snprintf(prompt_str, sizeof(prompt_str), "PRU%u> ", pru_num);

@@ -1,66 +1,84 @@
-**NOTE:** THIS IS NOT MY CODE. I'm hosting this here to back up my own changes in case my laptop and BeagleBone get
-lost in a fire or something. 
+Prudebug Version 0.28
+=====================
 
+This version is a fork of the original code released by Steven Anderson.  Many
+improvements have been added since the original code, including
 
-Prudebug Version 0.25
+  - Additional processors supported
+  - Additional instruction codes supported
+  - Commands to inspect, manipulate more registers
+  - Commands to inspect constants table (see documentation for PRU)
+  - Improvements to the user interface
+  - Addition of Debian packaging
+  - etc.
 
-(C) Copyright 2011, 2013 by Arctica Technologies
+Copyright notice of original 0.25 code:
+---------------------------------------
+(C) Copyright 2011, 2013 by Arctica Technologies<br>
 Written by Steven Anderson
 
-Prudebug is a very small program that was initially intended to be 100-200 lines of code to start/stop the PRU and load a binary in the PRU.
-As I worked through my PRU development project I added several addition features (some I needed for debugging the project, and a few just
-because they seemed nice).  After completing the PRU coding project this program sat unused for about a year before I decided that maybe
-someone else out there needed a PRU debugger.  After all, if you need a hard realtime process and you're using Linux, a PRU is an easy
-way to go.
+Description
+-----------
+Prudebug is a very small program that was initially intended to be 100-200 lines
+of code to start/stop the Texas Instruments Programmable Realtime Unit (PRU) and
+load a binary in the PRU.  It has evolved over time into a fairly functional
+commandline debugger for the PRU.  While functional, this is a very low-level
+debugger.  There is currently no connection to lines in a high level language.
+Instructions are visible, but only presented as disassembled assembly language
+instructions.  There is no attempt to make any connection to the register values
+and any variables that may have been described in any high level programming
+language.  Nevertheless, prudebug is valuable in the development of hard
+realtime programs meant to run on a PRU.  One can inspect and also manipulate
+the data, instructions, and registers in all of the PRU resources in order to
+debug a realtime program.
 
-THIS PROGRAM HAS VERY LIMITED TESTING - USE AT YOUR OWN RISK.
-I did test the features that I used, but there are many features I didn't need for my project.  I attempted a couple quick tests with the
-unused features, but it would be very easy to miss something.  For example, I only used PRU0 for my coding, so very little testing was done
-with PRU1.  I'm sure the user interface has bugs but I haven't hit them yet....it's easy to miss issues when you know how it's supposed 
-to work.  As I continue to add code, I'll try to do a more complete job of testing, but I will continue to use feedback for locating most
-bugs.
+Prudebug has slowly improved over time and all of the features are not
+necessarily tested for every processor.  Although TI seems to use a consistent
+memory layout for the PRU across different SoCs that should allow consistent
+interaction with PRU cores across several different SoCs, one should approach
+this use with caution.
+
+USE AT YOUR OWN RISK.
 
 
 RELEASE NOTES for prudebug
 ---------------------------------------------------------------------
+Version 0.28
+
+  - Improvements:
+    - Commandline improvements using the readline library
+    - Support of additional SoCs
+    - Support for more instructions
+    - Support for realtime guaranteed hardware breakpoints
+
 Version 0.24
-	Improvements:
-	
-	Added support for UIO PRUSS driver
-	Moved to dynamic processor selection - user can pick a processor on the command line
-	Fixed watchpoints and breakpoints to support different values on different PRUs
+
+  - Improvements:
+	- Added support for UIO PRUSS driver
+	- Moved to dynamic processor selection - user can pick a processor on the command line
+	- Fixed watchpoints and breakpoints to support different values on different PRUs
 
 Version 0.25
-	Bug fixes provided by Shoji Suzuki
-		Correction to the QBA instruction decode
-		Fix backspace code for terminals using 0x7f
-		Corrected issue with writing numbers greater than 0x7fffffff to PRU memory with the wr command
 
-
-BUGS
----------------------------------------------------------------------
-Please let me know if you find any bugs or you have comments on prudebug (steve.anderson@arcticatechnologies.com).  You can also log a bug
-on the SourceForge page.  I will try to fix bugs as time permits.
-
-	No known bugs at the time of v0.25 release
-
-
-USE WITH PRUSS v2
----------------------------------------------------------------------
-prudebug should work fine with the PRUSSv2.  It does not support any new features of the PRUSSv2, but I will try to add some as
-time permits.  I have done some testing on both the AM1707 (PRUSSv1) and AM3358 (PRUSSv2) processors.
+  - Bug fixes provided by Shoji Suzuki
+    - Correction to the QBA instruction decode
+    - Fix backspace code for terminals using 0x7f
+    - Corrected issue with writing numbers greater than 0x7fffffff to PRU memory with the wr command
 
 
 CONTRIBUTORS
 ---------------------------------------------------------------------
-	Christian Joly - bug fixes, and modifications to make prudebug work with PRUSSv2.
-	Shoji Suzuki - bug fixes for v0.25
+  - Spencer Olson - bug fixes and lots of improvements
+  - Giulio Moro - bug fixes and lots of improvements
+  - Dhruva Gole - documentation improvements and register updates for AM57x[12]
+  - Christian Joly - bug fixes, and modifications to make prudebug work with PRUSSv2.
+  - Shoji Suzuki - bug fixes for v0.25
 
 
 INSTALLATION
 ---------------------------------------------------------------------
-To build just run make in the source code directory (make sure you have the correct cross-compiler in place and in the path - 
-arm-none-linux-gnueabi-gcc). You may also need to run 
+To build just run make in the source code directory (make sure you have the correct cross-compiler in place and in the path -
+arm-none-linux-gnueabi-gcc). You may also need to run
 ```sh
 sudo apt-get install libreadline-dev
 ```
@@ -92,32 +110,34 @@ modify prudbg.c and prudbg.h (see remarks near the beginning of prudbg.c).  If y
 send me the diff so I can add it into future releases.
 
 
-*COMMAND HELP*
-I would like to spend a little time writing up a command document, but in the meantime the following will have to do.
-The command line takes the command 'help' to provide a detailed help, and 'hb' for a brief help.  Listed below is both.
+### COMMAND HELP
+The command line takes the command 'help' to provide a detailed help, and 'hb'
+for a brief help.  The output of both commands is given below.
 
 ```sh
 PRU0> hb
 Command help
 
-    BR [breakpoint_number [address]] - View or set an instruction breakpoint
-    D memory_location_wa [length] - Raw dump of PRU data memory (32-bit word offset from beginning of full PRU memory block - all PRUs)
+    BR [breakpoint_number [address [s]]] - View or set an instruction breakpoint, "s" makes it a software breakpoint
+    D <address> [length] - Raw dump of PRU data memory (byte offset from beginning of full PRU memory block - all PRUs)
     DD memory_location_wa [length] - Dump data memory (32-bit word offset from beginning of PRU data memory)
-    DI memory_location_wa [length] - Dump instruction memory (32-bit word offset from beginning of PRU instruction memory)
-    DIS memory_location_wa [length] - Disassemble instruction memory (32-bit word offset from beginning of PRU instruction memory)
+    DD <address> [length] - Dump data memory (byte offset from beginning of PRU data memory)
+    DI <address> [length] - Dump instruction memory (byte offset from beginning of PRU instruction memory)
+    DIS <32bit-address> [length] - Disassemble instruction memory (32-bit word offset from beginning of PRU instruction memory)
     G - Start processor execution of instructions (at current IP)
     GSS - Start processor execution using automatic single stepping - this allows running a program with breakpoints
+    TRACE [<stop_on_halt> [<filename>]] - Start processor execution while sampling its program counter]
     HALT - Halt the processor
-    L memory_location_iwa file_name - Load program file into instruction memory
+    L <32bit-address> file_name - Load program file into instruction memory
     PRU pru_number - Set the active PRU where pru_number ranges from 0 to 1
     Q - Quit the debugger and return to shell prompt.
     R - Display the current PRU registers.
     RESET - Reset the current PRU
     SS - Single step the current instruction.
-    WA [watch_num [address [value]]] - Clear or set a watch point
-    WR memory_location_wa value1 [value2 [value3 ...]] - Write a 32-bit value to a raw (offset from beginning of full PRU memory block)
-    WRD memory_location_wa value1 [value2 [value3 ...]] - Write a 32-bit value to PRU data memory for current PRU
-    WRI memory_location_wa value1 [value2 [value3 ...]] - Write a 32-bit value to PRU instruction memory for current PRU
+    WA [watch_num [address [ (len | : value0 [value1 ...]) ]]] - Clear or set a watch point
+    WR <address> value1 [value2 [value3 ...]] - Write a byte value to a raw (offset from beginning of full PRU memory block)
+    WRD <address> value1 [value2 [value3 ...]] - Write a byte value to PRU data memory for current PRU
+    WRI <address> value1 [value2 [value3 ...]] - Write a byte value to PRU instruction memory for current PRU
 
 ```
 
@@ -134,12 +154,14 @@ General hints:
       `d`, `dd`, or `di` commands subsequent iterations will display the next
       block
 
-BR [breakpoint_number [address]]
+BR [breakpoint_number [address [s]]]
     View or set an instruction breakpoint
      - 'b' by itself will display current breakpoints
      - breakpoint_number is the breakpoint reference and ranges from 0 to 9
      - address is the instruction word address that the processor should stop
        at (instruction is not executed)
+     - "s" forces it to be a software breakpoint that requires single-stepping
+       and may break real-time performance
      - if no address is provided, then the breakpoint is cleared
 
 CYCLE [clear | off | on ]
@@ -169,6 +191,13 @@ GSS [<count>]
     given, only <count> steps will be made.  If <count> is either not specified
     or given as '0', stepping will continue until otherwise interrupted.
 
+TRACE [<k_elements>] [<stop_on_halt> [<filename>]]
+    Start processor execution while sampling its program counter]
+    - <k_elements> how many thousand elements to store (defaults to 1)
+    - if <stop_on_halt> is true, it will stop automatically when a HALT
+      instruction is encountered. This will result in lower sampling rate.
+    - if <filename> is passed, the trace will be written to it instead of stdout
+
 HALT
     Halt the processor
 
@@ -177,7 +206,8 @@ L <32bit-address> file_name
     (offset from beginning of instruction memory
 
 J address
-    Move the program counter to the specified address (absolute or relative). If <address> is not provided, jumps to +1
+    Move the program counter to the specified address (absolute or relative).
+    If <address> is not provided, jumps to +1
 
 PRU <pru_number>
     Set the active PRU where pru_number ranges from 0 to 1
@@ -186,8 +216,20 @@ PRU <pru_number>
 Q
     Quit the debugger and return to shell prompt.
 
-R [value]
-    Display or modify the current PRU registers.
+R
+    Display current PRU registers.
+
+Rx [value]
+    Display or modify register value, e.g.:
+    R2 // prints R2
+    R2 0x01234 // set R2 to 0x1234
+
+C
+    Display current PRU constant table.
+
+Cx [value]
+    Display value from the constant table, e.g.:
+    C2 // prints C2
 
 RESET
     Reset the current PRU
@@ -231,4 +273,5 @@ WRI <address> value1 [value2 [value3 ...]]
     PRU instruction memory)
 
 A brief version of help is available with the command hb
+
 ```

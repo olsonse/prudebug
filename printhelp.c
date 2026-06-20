@@ -33,7 +33,9 @@ void printhelp()
 	printf("     - address is the instruction word address that the "
 			"processor should stop\n");
 	printf("       at (instruction is not executed)\n");
-	printf("     - \"s\" forces it to be a software breakpoint that requires single-stepping and may break real-time performance\n");
+	printf("     - \"s\" forces it to be a software breakpoint that "
+	               "requires single-stepping\n"
+	       "       and may break real-time performance\n");
 	printf("     - if no address is provided, then the breakpoint is "
 			"cleared\n\n");
 
@@ -88,8 +90,11 @@ void printhelp()
 	printf("    Load program file into instruction memory at 32-bit word "
 			"address provided\n");
 	printf("    (offset from beginning of instruction memory\n\n");
+
 	printf("J address\n");
-	printf("    Move the program counter to the specified address (absolute or relative). If <address> is not provided, jumps to +1\n\n");
+	printf("    Move the program counter to the specified address "
+		   "(absolute or relative).\n"
+	       "    If <address> is not provided, jumps to +1\n\n");
 
 
 	printf("PRU <pru_number>\n");
@@ -105,16 +110,16 @@ void printhelp()
 	printf("    Display current PRU registers.\n\n");
 
 	printf("Rx [value]\n");
-	printf("     Display or modify register value, e.g.:\n");
-	printf("     R2 // prints R2 \n");
-	printf("     R2 0x01234 // set R2 to 0x1234 \n\n");
+	printf("    Display or modify register value, e.g.:\n");
+	printf("    R2 // prints R2\n");
+	printf("    R2 0x01234 // set R2 to 0x1234\n\n");
 
 	printf("C\n");
 	printf("    Display current PRU constant table.\n\n");
 
 	printf("Cx [value]\n");
-	printf("     Display value from the constant table, e.g.:\n");
-	printf("     C2 // prints C2 \n");
+	printf("    Display value from the constant table, e.g.:\n");
+	printf("    C2 // prints C2\n");
 
 	printf("RESET\n");
 	printf("    Reset the current PRU\n\n");

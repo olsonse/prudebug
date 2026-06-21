@@ -1,3 +1,4 @@
+// vim: noet:sw=8:ts=8:tw=80:nowrap
 /*
  *
  *  PRU Debug Program
@@ -41,33 +42,36 @@ typedef struct offsets_tag {
 	unsigned int		pruss_ctrl;
 } offsets_t;
 
+/** "Database" of available processors.
+ * To add another processor please copy one of the existing structures to
+ * the end before the END MARKER structure.
+ */
 struct pdb_tag {
+	/** processor is a longer descriptive name provided for information and
+	 * display to the user only.
+	 */
 	char			processor[MAX_PROC_NAME];
+
+	/** short_name is the key that the user provides to manually select the
+	 * SoC.  Keep it short and no spaces or non-ASCII characters.
+	 */
 	char			short_name[MAX_PROC_NAME];
+
+	/** The base byte address of the PRUSS/ICSS/ICSSG module. */
 	unsigned int		pruss_address;
+
+	/** The total length of memory mmap'd to access PRU data/registers. */
 	unsigned int		pruss_len;
+
+	/** The total number of PRUs available for which offsets are described.
+	 */
 	unsigned int		num_of_pruss;
+
+	/** Address offsets of each PRU for data, instruction, and control
+	 * memory.
+	 */
 	const offsets_t		offsets[MAX_NUM_OF_PRUS];
 } pdb[] = {
-
-// The following is a "database" of available processors.
-// To add another processor please copy one of the existing structures to
-// the end before the END MARKER structure.  "processor" is the long name
-// for the processor (used for displaying info), "short_name" is used to
-// select a processor at the command prompt (should be short and no spaces),
-// "pruss_address" is the byte address of the beginning of the PRUSS memory
-// space on the ARM, "pruss_len" is the memory allocated starting at the
-// pruss_address address, "num_of_pruss" is the number of PRUs in the ARM
-// processor (currently 2 is the only valid value), and "offsets" is an
-// array of 32-bit word address/index values used to locate the instruction,
-// data, and control memory locations for a specific PRU.  This offsets
-// array much contain num_of_pruss entries.  If you add a processor to
-// this structure then you should also add a DEFINE to the beginning of
-// the prudbg.h file to represent the processor index in the structure
-// array.  This is only used for the DEFAULT_PROCESSOR_INDEX in the
-// prudbg.h file (this sets the processor used if none is selected
-// on the command line).
-
 	{
 		.processor 	= "AM1707",
 		.short_name 	= "AM1707",
@@ -88,7 +92,7 @@ struct pdb_tag {
 		}
 	},
 	{
-		.processor 	= "AM335x",
+		.processor 	= "AM335x (e.g. BeagleBone Black)",
 		.short_name 	= "AM335X",
 		.pruss_address 	= 0x4A300000,
 		.pruss_len 	= 0x40000,
@@ -145,7 +149,7 @@ struct pdb_tag {
 		}
 	},
 	{
-		.processor      = "XJ721E",
+		.processor      = "XJ721E (e.g. BBAI-64)",
 		.short_name     = "XJ721E",
 		.pruss_address  = 0xb000000,
 		.pruss_len      = 0x80000,
@@ -188,6 +192,19 @@ struct pdb_tag {
 		.num_of_pruss	= 0
 	}
 };
+
+int find_SoC_entry(const char * shortname) {
+	unsigned int i;
+	int SoC = -1;
+	/* Now loop through all known SoCs, until the first match. */
+	for(i=0; pdb[i].num_of_pruss != 0; ++i) {
+		if (!strcmp(pdb[i].short_name, shortname)) {
+			SoC = i;
+			break; // found
+		}
+	}
+	return SoC;
+}
 
 int strcmpci(char *str1, char *str2, int m) {
 	unsigned int		i;
@@ -248,6 +265,38 @@ static size_t parse_addr(const char * str, const regex_t * reg_regex) {
 	return addr;
 }
 
+void print_usage(const char * prog, int soc) {
+	unsigned int i;
+	printf("Usage: prudebug [OPTIONS]\n"
+	       "--------------------------------------------------------------------------------\n"
+	       "  Where OPTIONS are:\n"
+	       "    -h   Show this help\n"
+	       "    -a PRUSS_ADDRESS\n"
+	       "         Where pruss-address is the memory address of the PRU in ARM memory\n"
+	       "         space.  Not recommended for use\n"
+	       "    -u\n"
+	       "         Force the use of UIO to map PRU memory space\n"
+	       "    -m\n"
+	       "         Force the use of /dev/mem to map PRU memory space\n"
+	       "\n"
+	       "         If neither -u or -m are specified then it will try the UIO first\n"
+	       "\n"
+	       "    -n PRU\n"
+	       "	Select PRU number to use\n"
+	       "    -r FILENAME\n"
+	       "        Load filename containing register numbers<->names mapping in the form:\n"
+	       "        \"<number> <name>\"\n"
+	       "    -p SOC\n"
+	       "        Select SoC using KEY to use (sets the PRU memory locations)\n"
+	       "        KEY    - Description\n"
+	       "        --------------------\n");
+	for(i=0; pdb[i].num_of_pruss != 0; i++) {
+		printf("        %s - %s\n", pdb[i].short_name, pdb[i].processor);
+	}
+	printf("        --------------------\n");
+	printf("        Default: %s\n", pdb[soc].processor);
+}
+
 // main entry point for program
 int main(int argc, char *argv[])
 {
@@ -261,23 +310,27 @@ int main(int argc, char *argv[])
 	unsigned long		opt_pruss_addr;
 	int			pru_access_mode, pi, pitemp;
 	char			uio_dev_file[50];
-	regex_t reg_regex;
+	regex_t watchreg_regex;
 	regex_t rc_regex;
-	regcomp(&reg_regex, "[:space:]*r[0-9]\\+\\>", REG_ICASE);
-	regcomp(&rc_regex, "[:space:]*[rc][0-9]\\+\\>", REG_ICASE);
 
 	// say hello
 	printf ("PRU Debugger v" VERSION "\n");
 	printf ("(C) Copyright 2011, 2013 by Arctica Technologies.  All rights reserved.\n");
 	printf ("Written by Steven Anderson\n");
+
+	pi = find_SoC_entry(DEFAULT_SOC);
+	if (pi < 0) {
+		// This really shouldn't happen...
+		printf ("ERROR:  No default SoC found.\n\n");
+		return -1;
+	}
 	printf ("\n");
 
 	// get command line options
 	opt_pruss_addr = 0;
 	pru_access_mode = ACCESS_GUESS;
-	pi = DEFAULT_PROCESSOR_INDEX;
 	unsigned int requested_pru = 0;
-	while ((opt = getopt(argc, argv, "?a:p:umn:r:")) != -1) {
+	while ((opt = getopt(argc, argv, "h?a:p:umn:r:")) != -1) {
 		switch (opt) {
 			case 'a':
 				opt_pruss_addr = parse_long(optarg);
@@ -310,21 +363,10 @@ int main(int argc, char *argv[])
 				}
 				break;
 				
+			case 'h':
 			case '?':
 			default: /* '?' */
-				printf("Usage: prudebug [-a pruss-address] [-u] [-m] [-p processor] [-n pru_num] [-r filename]\n");
-				printf("    -a - pruss-address is the memory address of the PRU in ARM memory space\n");
-				printf("    -u - force the use of UIO to map PRU memory space\n");
-				printf("    -m - force the use of /dev/mem to map PRU memory space\n");
-				printf("    if neither the -u or -m options are used then it will try the UIO first\n");
-				
-				printf("    -n - select PRU number to use\n");
-				printf("    -r filename - load filename containing register numbers<->names mapping in the form \"<number> <name>\"\n");
-				printf("    -p - select SoC to use (sets the PRU memory locations)\n");
-				for(i=0; pdb[i].num_of_pruss != 0; i++) {
-					printf("        %s - %s\n", pdb[i].short_name, pdb[i].processor);
-				}
-				
+				print_usage(argv[0], pi);
 				return(-1);
 		}
 	}
@@ -394,6 +436,10 @@ int main(int argc, char *argv[])
 		printf ("Using /dev/mem device.\n");
 	}
 	drop_root_privileges();
+
+	// Prepare register regex!
+	regcomp(&watchreg_regex, WATCH_REGISTERS_REGEX, REG_ICASE);
+	regcomp(&rc_regex, REGISTER_CMD_REGEX, REG_ICASE);
 
 	// get memory pointer for PRU from /dev/mem
 
@@ -710,7 +756,7 @@ int main(int argc, char *argv[])
 				unsigned int len = 4;
 
 				wanum = parse_long(&cmdargs[argptrs[0]]);
-				addr = parse_addr(&cmdargs[argptrs[1]], &reg_regex);
+				addr = parse_addr(&cmdargs[argptrs[1]], &watchreg_regex);
 				if (numargs == 3)
 					len = parse_long(&cmdargs[argptrs[2]]);
 				if (wanum < MAX_WATCH) {
@@ -724,7 +770,7 @@ int main(int argc, char *argv[])
 				unsigned char vlist[MAX_WATCH_LEN];
 
 				wanum = parse_long(&cmdargs[argptrs[0]]);
-				addr  = parse_addr(&cmdargs[argptrs[1]], &reg_regex);
+				addr  = parse_addr(&cmdargs[argptrs[1]], &watchreg_regex);
 
 				/* gather all the values */
 				for(i = 3; i < numargs; ++i) {
@@ -814,7 +860,7 @@ int main(int argc, char *argv[])
 	} while (strcmp(cmd, "Q"));
 
 	printf("\nGoodbye.\n\n");
-	regfree(&reg_regex);
+	regfree(&watchreg_regex);
 	regfree(&rc_regex);
 	cmd_free();
 

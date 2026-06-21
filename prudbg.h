@@ -10,18 +10,9 @@
 #define PRUDBG_H
 #include <stdint.h>
 
-// default processor to use if none is specified on the command line when prudebug is started
-#define DEFAULT_PROCESSOR_INDEX	AM335x
-
-// list of processors to use in the define above (DEFAULT_PROCESSOR_INDEX)
-// value for define must match the array index in the processor structure
-// in the prudbg.c file.
-#define AM1707			0
-#define AM335x			1
-#define AM57x1			2
-#define AM57x2			3
-#define XJ721E			4
-#define AM62xx			5
+// default processor to use if none is specified on the command line and none is
+// detected.
+#define DEFAULT_SOC	"AM335X"
 
 // general settings
 #define MAX_CMD_LEN		25
@@ -30,12 +21,16 @@
 #define MAX_ARGS		10
 #define MAX_PRU_MEM		0xFFFF
 #define NUM_OF_PRU		2
-#define MAX_NUM_OF_PRUS		16					// maximum number of PRUs to expect in any processor
-#define MAX_BREAKPOINTS		10
+#define MAX_NUM_OF_PRUS	16	// maximum number of PRUs to expect in any processor
+#define MAX_BREAKPOINTS	10
 #define MAX_WATCH		10
 #define MAX_WATCH_LEN		32
-#define MAX_PROC_NAME		20
+#define MAX_PROC_NAME		64
 #define NUM_REGS		32
+
+// REGULAR EXPRESSIONS FOR COMMANDS
+#define REGISTER_CMD_REGEX    "[:space:]*[rc][0-9]\\+\\>"
+#define WATCH_REGISTERS_REGEX "[:space:]*r[0-9]\\+\\>"
 
 // register offsets [4-byte word address offsets]
 #define PRU_CTRL_REG		0x0000

@@ -57,6 +57,12 @@ struct pdb_tag {
 	 */
 	char			short_name[MAX_PROC_NAME];
 
+	/** model_regex is used to attempt to autodetect the SoC based on
+	 * /sys/firmware/devicetree/base/compatible.  Matches will be done in a
+	 * case-insensitive manner.
+	 */
+	char      compatible_regex[MAX_PROC_NAME_REGEX];
+
 	/** The base byte address of the PRUSS/ICSS/ICSSG module. */
 	unsigned int		pruss_address;
 
@@ -75,6 +81,7 @@ struct pdb_tag {
 	{
 		.processor 	= "AM1707",
 		.short_name 	= "AM1707",
+		.compatible_regex = "\\<am1707\\>",
 		.pruss_address 	= 0x01C30000,
 		.pruss_len 	= 0x20000,
 		.num_of_pruss	= 2,
@@ -94,6 +101,7 @@ struct pdb_tag {
 	{
 		.processor 	= "AM335x (e.g. BeagleBone Black)",
 		.short_name 	= "AM335X",
+		.compatible_regex = "\\<am335x\\>",
 		.pruss_address 	= 0x4A300000,
 		.pruss_len 	= 0x40000,
 		.num_of_pruss	= 2,
@@ -113,6 +121,7 @@ struct pdb_tag {
 	{
 		.processor 	= "AM57x1",
 		.short_name 	= "AM57X1",
+		.compatible_regex = "\\<am57x1\\>",
 		.pruss_address 	= 0x4b200000,
 		.pruss_len 	= 0x80000,
 		.num_of_pruss	= 2,
@@ -132,6 +141,7 @@ struct pdb_tag {
 	{
 		.processor 	= "AM57x2",
 		.short_name 	= "AM57X2",
+		.compatible_regex = "\\<am57x2\\>",
 		.pruss_address 	= 0x4b280000,
 		.pruss_len 	= 0x80000,
 		.num_of_pruss	= 2,
@@ -151,6 +161,7 @@ struct pdb_tag {
 	{
 		.processor      = "XJ721E (e.g. BBAI-64)",
 		.short_name     = "XJ721E",
+		.compatible_regex = "\\<x?j721e\\>",
 		.pruss_address  = 0xb000000,
 		.pruss_len      = 0x80000,
 		.num_of_pruss   = 2,
@@ -170,6 +181,7 @@ struct pdb_tag {
 	{
 		.processor 	= "AM62xx",
 		.short_name 	= "AM62xx",
+		.compatible_regex = "\\<am62xx\\>",
 		.pruss_address 	= 0x30040000,
 		.pruss_len 	= 0x80000,
 		.num_of_pruss	= 2,
@@ -192,6 +204,52 @@ struct pdb_tag {
 		.num_of_pruss	= 0
 	}
 };
+
+/** Attempt to discover the identity of the SoC that we are running on right
+ * now. */
+int discover_SoC() {
+	FILE *file;
+	regex_t regex;
+	char buffer[128];
+	int nbytes;
+	unsigned int i, last_nul;
+	int SoC;
+
+	file = fopen("/sys/firmware/devicetree/base/compatible", "r");
+	if (file == NULL) {
+		/* could not open firmware compatibility, so give up. */
+		return -1;
+	}
+
+	/* lets read it in and replace all internal nul chars with ';'. */
+	nbytes = fread(buffer, sizeof(buffer[0]), sizeof(buffer), file);
+	fclose(file);
+
+	last_nul = 0;
+	for (i = 0; i < nbytes; ++i) {
+		if (buffer[i] == '\0') {
+			buffer[i] = ';';
+			last_nul = i;
+		}
+	}
+	buffer[last_nul] = '\0';
+	/* now we might have a string like (for the beaglebone black):
+	 * ti,am335x-bone-black;ti,am335x-bone;ti,am33xx
+	 */
+
+	/* Now loop through all known SoCs, until the first match. */
+	SoC = -1;
+	for(i=0; pdb[i].num_of_pruss != 0; ++i) {
+		regcomp(&regex, pdb[i].compatible_regex, REG_ICASE); // compile
+		if (!regexec(&regex, buffer, 0, NULL, 0)) // test match
+			SoC = i; // match found
+		regfree(&regex); // free compiled regex
+
+		if (SoC >= 0)
+			break; // finished
+	}
+	return SoC;
+}
 
 int find_SoC_entry(const char * shortname) {
 	unsigned int i;
@@ -310,6 +368,7 @@ int main(int argc, char *argv[])
 	unsigned long		opt_pruss_addr;
 	int			pru_access_mode, pi, pitemp;
 	char			uio_dev_file[50];
+	int			SoC_discovered;
 	regex_t watchreg_regex;
 	regex_t rc_regex;
 
@@ -318,11 +377,17 @@ int main(int argc, char *argv[])
 	printf ("(C) Copyright 2011, 2013 by Arctica Technologies.  All rights reserved.\n");
 	printf ("Written by Steven Anderson\n");
 
-	pi = find_SoC_entry(DEFAULT_SOC);
-	if (pi < 0) {
-		// This really shouldn't happen...
-		printf ("ERROR:  No default SoC found.\n\n");
-		return -1;
+	SoC_discovered = discover_SoC();
+	if (SoC_discovered >= 0) {
+		printf ("SoC detected: %s\n", pdb[SoC_discovered].processor);
+		pi = SoC_discovered;
+	} else {
+		pi = find_SoC_entry(DEFAULT_SOC);
+		if (pi < 0) {
+			// This really shouldn't happen...
+			printf ("ERROR:  No default SoC found.\n\n");
+			return -1;
+		}
 	}
 	printf ("\n");
 

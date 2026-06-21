@@ -33,10 +33,10 @@ class GitVersion(object):
     tag_commit = p.communicate()[0].decode()
     if 'Tagger:' in tag_commit:
       # this is an annotated tag
-      m = re.search('\nTagger:\s*(?P<name>[^\n]*)\nDate:\s*(?P<date>[^\n]*)\n', tag_commit)
+      m = re.search('\nTagger:\\s*(?P<name>[^\n]*)\nDate:\\s*(?P<date>[^\n]*)\n', tag_commit)
     else:
       # this is a non-annotated tag
-      m = re.search('\nAuthor:\s*(?P<name>[^\n]*)\nDate:\s*(?P<date>[^\n]*)\n', tag_commit)
+      m = re.search('\nAuthor:\\s*(?P<name>[^\n]*)\nDate:\\s*(?P<date>[^\n]*)\n', tag_commit)
 
     self.maintainer = m.groupdict()['name']
     if not self.date:
@@ -66,7 +66,7 @@ class GitVersion(object):
     if self.last_git_version:
       p = Popen(['git','log',self.last_git_version+'..'+self.current_git_version,
                  '--format=  * %s%n    %b'], stdout=PIPE)
-      psed = Popen(['sed','-e','s/^\([^ ]\)/    \\1/'], stdin=p.stdout, stdout=PIPE)
+      psed = Popen(['sed', '-e', r's/^\([^ ]\)/    \1/'], stdin=p.stdout, stdout=PIPE)
       return psed.communicate()[0].decode()
     else:
       return '  * Initial version\n'

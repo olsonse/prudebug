@@ -29,7 +29,7 @@ volatile sig_atomic_t sigint_caught = 0;
 void sigint_handler(int sig)
 {
 	sigint_caught = 1;
-	printf("^C\n");
+	printf("\n");
 	fflush(stdout);
 }
 

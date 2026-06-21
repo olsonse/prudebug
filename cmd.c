@@ -1,3 +1,4 @@
+// vim: noet:sw=8:ts=8:tw=80:nowrap
 /*
  *
  *  PRU Debug Program
@@ -81,6 +82,20 @@ static void loop_signal_handler(int signum) {
 	if (signum == SIGINT) {
 		loop_should_stop = 1;
 	}
+}
+
+static struct sigaction sa_to_restore;
+static void prep_for_loop() {
+	struct sigaction sa;
+	sa.sa_handler = loop_signal_handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART; // Resteart system calls if interrupted
+	sigaction(SIGINT, &sa, &sa_to_restore);
+	loop_should_stop = 0;
+}
+static void unprep_for_loop() {
+	sigaction(SIGINT, &sa_to_restore, NULL);
+	loop_should_stop = 1;
 }
 
 // breakpoint management
@@ -486,7 +501,7 @@ void cmd_runss(long count)
 	int run_hw = !sw_watch && !sw_break && count < 0;
 	int run_hw_hit = -1;
 
-	signal(SIGINT, loop_signal_handler);
+	prep_for_loop();
 	// enter single-step loop
 	do {
 		// decrease count
@@ -587,6 +602,7 @@ void cmd_runss(long count)
 		// increase time
 		t_cyc++;
 	} while (!loop_should_stop && (!done) && (count != 0));
+	unprep_for_loop();
 	if(run_hw) {
 		run_hw_disable_all();
 	}
@@ -635,8 +651,7 @@ void cmd_trace(unsigned int k_elements, unsigned int on_halt, const char* filena
 	}
 	unsigned int count = 0;
 	printf("Running trace for %u k elements ... press ctrl-C to stop%s\n", k_elements, on_halt ? " or it will stop on halt" : "");
-	loop_should_stop = 0;
-	signal(SIGINT, loop_signal_handler);
+	prep_for_loop();
 	count = 1;
 	trace[0] = get_program_counter();
 	cmd_run();
@@ -649,6 +664,7 @@ void cmd_trace(unsigned int k_elements, unsigned int on_halt, const char* filena
 				break;
 		}
 	}
+	unprep_for_loop();
 	if (filename) {
 		FILE* stream = fopen(filename, "w");
 		char str[10];

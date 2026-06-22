@@ -310,7 +310,8 @@ void cmd_printrcs(enum RegOrConst type)
 	else
 		proc_en = "PROC_DISABLED";
 
-	printf("%s info for PRU%u\n", kReg == type ? "Register" : "Constant", pru_num);
+	printf("%s info for PRU%u (%s)\n", kReg == type ? "Register" : "Constant",
+	       pru_num, pru_label[pru_num]);
 	printf("    Control register: 0x%08x\n", ctrl_reg);
 	printf("      Reset PC:0x%04x  %s, %s, %s, %s, %s\n\n", reset_pc, run_state, single_step, cycle_cnt_en, pru_sleep, proc_en);
 

@@ -29,6 +29,7 @@ volatile unsigned int		*pru;
 unsigned int			pru_inst_base[MAX_NUM_OF_PRUS];
 unsigned int			pru_ctrl_base[MAX_NUM_OF_PRUS];
 unsigned int			pru_data_base[MAX_NUM_OF_PRUS];
+const char			*pru_label[MAX_NUM_OF_PRUS];
 unsigned int			pru_num;
 unsigned int			last_offset, last_addr, last_len, last_cmd;
 unsigned int			last_n_single_step;
@@ -517,6 +518,7 @@ int main(int argc, char *argv[])
 	
 	// setup PRU memory offsets
 	for (i=0; i<pdb[pi].num_of_pruss ;i++) {
+		pru_label[i]     = pdb[pi].offsets[i].label;
 		pru_inst_base[i] = pdb[pi].offsets[i].pruss_inst;
 		pru_data_base[i] = pdb[pi].offsets[i].pruss_data;
 		pru_ctrl_base[i] = pdb[pi].offsets[i].pruss_ctrl;

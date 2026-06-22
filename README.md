@@ -66,7 +66,7 @@ Version 0.25
     - Corrected issue with writing numbers greater than 0x7fffffff to PRU memory with the wr command
 
 
-CONTRIBUTORS
+Contributors
 ---------------------------------------------------------------------
   - Spencer Olson - bug fixes and lots of improvements
   - Giulio Moro - bug fixes and lots of improvements
@@ -75,42 +75,79 @@ CONTRIBUTORS
   - Shoji Suzuki - bug fixes for v0.25
 
 
-INSTALLATION
+Installation
 ---------------------------------------------------------------------
-To build just run make in the source code directory (make sure you have the correct cross-compiler in place and in the path -
-arm-none-linux-gnueabi-gcc). You may also need to run
+To build just run make in the source code directory (make sure you have the
+correct cross-compiler, such as `arm-none-linux-gnueabi-gcc`, in place and in
+your search path).  You may also need to run
 ```sh
 sudo apt-get install libreadline-dev
 ```
 to install the readline library. The binary is called prudebug.
 
 
-USAGE
+Usage
 ---------------------------------------------------------------------
 ```
-Usage: prudebug [-a pruss-address] [-u] [-m] [-p processor]
-    -a - pruss-address is the memory address of the PRU in ARM memory space
-    -u - force the use of UIO to map PRU memory space
-    -m - force the use of /dev/mem to map PRU memory space
-    if neither the -u or -m options are used then it will try the UIO first
-    -p - select processor to use (sets the PRU memory locations)
+Usage: prudebug [OPTIONS]
+--------------------------------------------------------------------------------
+  Where OPTIONS are:
+    -h   Show this help
+    -a PRUSS_ADDRESS
+         Where pruss-address is the memory address of the PRU in ARM memory
+         space.  Not recommended for use
+    -u
+         Force the use of UIO to map PRU memory space
+    -m
+         Force the use of /dev/mem to map PRU memory space
+
+         If neither -u or -m are specified then it will try the UIO first
+
+    -n PRU
+	Select PRU number to use
+    -r FILENAME
+        Load filename containing register numbers<->names mapping in the form:
+        "<number> <name>"
+    -p SOC
+        Select SoC using KEY to use (sets the PRU memory locations)
+        KEY    - Description
+        --------------------
         AM1707 - AM1707
-        AM335X - AM335x
+        AM335X - AM335x (e.g. BeagleBone Black)
         AM57X1 - AM57x1
         AM57X2 - AM57x2
+        J721E - J721E (e.g. BBAI-64)
+        AM62xx - AM62xx
 ```
 
-Generally the -a option should not be used.  If it is used, then prudebug will use the -a address for the PRU base with
-the selected processor as the various PRU subsystem offsets.  -u and -m control the way the PRU base address is mapped for
-program access (either the /dev/mem or /dev/uio* device).  If -u or -m are selected then it will only used the selected
-method or fail.  If neither the -u or -m are selected then prudebug will try to use the UIO device driver, and if that fails
-then it will use /dev/mem.  The -p option allows you to select the processor.  If your processor is not listed then determine
-if one of the listed processors has compatible PRU (same base address and PRU subsystem offsets).  If not, you'll need to
-modify prudbg.c and prudbg.h (see remarks near the beginning of prudbg.c).  If you do add to the list of processors, please
-send me the diff so I can add it into future releases.
+### SoC Auto-Detection
+
+Prudebug attempts to detect the SoC that it is running on.  This is done by
+inspecting the contents of `/sys/firmware/devicetree/base/compatible`.  This
+certainly relies on the device tree having this information available with
+patterns that are typical for beagleboard devices.
+
+### Notes on Command-Line Arguments
+`-a`:
+  Generally the -a option should not be used.  If it is used, then prudebug will
+  use the -a address for the PRU base with the selected processor as the various
+  PRU subsystem offsets.
+
+`-u` and `-m`:
+  Control the way the PRU base address is mapped for program access (either the
+  /dev/mem or /dev/uio* device).  If -u or -m are selected then it will only
+  used the selected method or fail.  If neither the -u or -m are selected then
+  prudebug will try to use the UIO device driver, and if that fails then it will
+  use /dev/mem.
+
+`-p`:
+  Manually select the processor SoC.  If your SoC is not listed then determine
+  if one of the listed processors has compatible PRU (same base address and PRU
+  subsystem offsets).  Supporting additional processors may be as simple as
+  including the address offsets in prudbg.c.
 
 
-### COMMAND HELP
+### Command Help
 The command line takes the command 'help' to provide a detailed help, and 'hb'
 for a brief help.  The output of both commands is given below.
 

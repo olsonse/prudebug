@@ -164,19 +164,88 @@ struct pdb_tag {
 		.short_name     = "J721E",
 		.compatible_regex = "\\<x\\?j721e\\>",
 		.pruss_address  = 0xb000000,
-		.pruss_len      = 0x80000,
-		.num_of_pruss   = 2,
+		.pruss_len      = 0x180000,
+		.num_of_pruss   = 12,
 		.offsets        = {
-		{
-			.pruss_inst     = 0xD000,
-			.pruss_data     = 0x0000,
-			.pruss_ctrl     = 0x8800
-		},
-		{
-			.pruss_inst     = 0xE000,
-			.pruss_data     = 0x0800,
-			.pruss_ctrl     = 0x9000
-		}
+			/* *** ICSSG0 *** */
+
+			{
+				.label          = "ICSSG0 PRU0",
+				.pruss_inst     = 0xD000,
+				.pruss_data     = 0x0000,
+				.pruss_ctrl     = 0x8800
+			},
+			{
+				.label          = "ICSSG0 RTU_PRU0",
+				.pruss_inst     = 0x1000,
+				.pruss_data     = 0x0000, // not indepenedent
+				.pruss_ctrl     = 0x8c00
+			},
+			{
+				.label          = "ICSSG0 TX_PRU0",
+				.pruss_inst     = 0x2800,
+				.pruss_data     = 0x0000, // not indepenedent
+				.pruss_ctrl     = 0x9400
+			},
+
+			{
+				.label          = "ICSSG0 PRU1",
+				.pruss_inst     = 0xE000,
+				.pruss_data     = 0x0800,
+				.pruss_ctrl     = 0x9000
+			},
+			{
+				.label          = "ICSSG0 RTU_PRU1",
+				.pruss_inst     = 0x1800,
+				.pruss_data     = 0x0800, // not indepenedent
+				.pruss_ctrl     = 0x8e00
+			},
+			{
+				.label          = "ICSSG0 TX_PRU1",
+				.pruss_inst     = 0x3000,
+				.pruss_data     = 0x0800, // not indepenedent
+				.pruss_ctrl     = 0x9600
+			},
+
+			/* *** ICSSG1 *** */
+
+			{
+				.label          = "ICSSG1 PRU0",
+				.pruss_inst     = 0x4D000,
+				.pruss_data     = 0x40000,
+				.pruss_ctrl     = 0x48800
+			},
+			{
+				.label          = "ICSSG1 RTU_PRU0",
+				.pruss_inst     = 0x41000,
+				.pruss_data     = 0x40000, // not independent
+				.pruss_ctrl     = 0x48c00
+			},
+			{
+				.label          = "ICSSG1 TX_PRU0",
+				.pruss_inst     = 0x42800,
+				.pruss_data     = 0x40000, // not indepenedent
+				.pruss_ctrl     = 0x49400
+			},
+
+			{
+				.label          = "ICSSG1 PRU1",
+				.pruss_inst     = 0x4E000,
+				.pruss_data     = 0x40800,
+				.pruss_ctrl     = 0x49000
+			},
+			{
+				.label          = "ICSSG1 RTU_PRU1",
+				.pruss_inst     = 0x41800,
+				.pruss_data     = 0x40800, // not indepenedent
+				.pruss_ctrl     = 0x48e00
+			},
+			{
+				.label          = "ICSSG1 TX_PRU1",
+				.pruss_inst     = 0x43000,
+				.pruss_data     = 0x40800, // not indepenedent
+				.pruss_ctrl     = 0x49600
+			},
 		}
 	},
 	{

@@ -35,8 +35,9 @@ unsigned int			last_n_single_step;
 struct breakpoints		bp[MAX_NUM_OF_PRUS][MAX_BREAKPOINTS];
 struct watchvariable		wa[MAX_NUM_OF_PRUS][MAX_WATCH];
 
-// processor database
+/** Offsets **as word addresses** for IRAM, DRAM, & control registers. */
 typedef struct offsets_tag {
+	char			label[MAX_PROC_LABEL];
 	unsigned int		pruss_inst;
 	unsigned int		pruss_data;
 	unsigned int		pruss_ctrl;
@@ -55,7 +56,7 @@ struct pdb_tag {
 	/** short_name is the key that the user provides to manually select the
 	 * SoC.  Keep it short and no spaces or non-ASCII characters.
 	 */
-	char			short_name[MAX_PROC_NAME];
+	char			short_name[MAX_PROC_LABEL];
 
 	/** model_regex is used to attempt to autodetect the SoC based on
 	 * /sys/firmware/devicetree/base/compatible.  Matches will be done in a
@@ -287,9 +288,13 @@ static void select_pru(struct pdb_tag* const tag, unsigned int num)
 	if(num < tag->num_of_pruss) {
 		pru_num = num;
 	} else {
-		fprintf(stderr, "Requested PRU %d but only %d are available\n", pru_num, tag->num_of_pruss);
+		fprintf(stderr, "Requested PRU %d but only %d are available\n",
+		        pru_num, tag->num_of_pruss);
 	}
-	printf("Active PRU is PRU%u.\n\n", pru_num);
+	printf("Active PRU is PRU%u.", pru_num);
+	if (strlen(tag->offsets[pru_num].label) > 0)
+		printf("  Label: '%s'", tag->offsets[pru_num].label);
+	printf("\n\n");
 }
 
 /* This function adds 0b... format recognition to strtoll */
@@ -419,7 +424,10 @@ int main(int argc, char *argv[])
 
 			case 'p':
 				pitemp = -1;
-				for(i=0; pdb[i].num_of_pruss != 0; i++) if (strcmpci(optarg, pdb[i].short_name, MAX_PROC_NAME)) pitemp = i;
+				for(i=0; pdb[i].num_of_pruss != 0; i++) {
+					if (strcmpci(optarg, pdb[i].short_name, MAX_PROC_LABEL))
+						pitemp = i;
+				}
 				
 				if (pitemp == -1) {
 					printf("WARNING: unrecognized processor - will use the compiled-in default processor.\n\n");
@@ -522,10 +530,15 @@ int main(int argc, char *argv[])
 	printf("Processor type		%s\n", pdb[pi].processor);
 	printf("PRUSS memory address	0x%08lx\n", opt_pruss_addr);
 	printf("PRUSS memory length	0x%08x\n\n", pdb[pi].pruss_len);
-	printf("         offsets below are in 32-bit word addresses (not ARM byte addresses)\n");
-	printf("         PRU            Instruction    Data         Ctrl\n");
-	for (i=0; i<pdb[pi].num_of_pruss; i++) {
-		printf("         %-15d0x%08x     0x%08x   0x%08x\n", i, pdb[pi].offsets[i].pruss_inst, pdb[pi].offsets[i].pruss_data, pdb[pi].offsets[i].pruss_ctrl);
+	printf("  offsets below are in 32-bit word addresses (not ARM byte addresses)\n");
+	printf("  PRU [LABEL]              Instruction    Data         Ctrl\n");
+	for (i=0; i<pdb[pi].num_of_pruss; ++i) {
+		printf("  %-4d%-21s0x%08x     0x%08x   0x%08x\n",
+		       i,
+		       pdb[pi].offsets[i].label,
+		       pdb[pi].offsets[i].pruss_inst,
+		       pdb[pi].offsets[i].pruss_data,
+		       pdb[pi].offsets[i].pruss_ctrl);
 	}
 	printf("\n");
 

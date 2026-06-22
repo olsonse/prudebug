@@ -25,6 +25,7 @@
 #define MAX_BREAKPOINTS	10
 #define MAX_WATCH		10
 #define MAX_WATCH_LEN		32
+#define MAX_PROC_LABEL	18  // labels are for short name and offset labels
 #define MAX_PROC_NAME		64
 #define MAX_PROC_NAME_REGEX MAX_PROC_NAME
 #define NUM_REGS		32

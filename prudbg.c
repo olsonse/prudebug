@@ -160,9 +160,9 @@ struct pdb_tag {
 		}
 	},
 	{
-		.processor      = "XJ721E (e.g. BBAI-64)",
-		.short_name     = "XJ721E",
-		.compatible_regex = "\\<x?j721e\\>",
+		.processor      = "J721E (e.g. BBAI-64)",
+		.short_name     = "J721E",
+		.compatible_regex = "\\<x\\?j721e\\>",
 		.pruss_address  = 0xb000000,
 		.pruss_len      = 0x80000,
 		.num_of_pruss   = 2,
